@@ -1,5 +1,23 @@
 import { info, debug, silent } from "./logger.js";
 
+//Declare file interface
+interface File {
+  name: string;
+  path: string;
+  sha: string;
+  size: number;
+  url: string;
+  html_url: string;
+  git_url: string;
+  download_url: string;
+  type: "file" | "dir";
+  _links: {
+    self: string;
+    git: string;
+    html: string;
+  };
+}
+
 // Function to calculate score and latency for each metric
 const measureLatency = async (fn: () => Promise<any>, label: string) => {
   const start = Date.now();
@@ -75,7 +93,7 @@ export async function netScore(url: string): Promise<any> {
   }
 
   // Calculate all metrics in parallel
-  const [BusFactor, Correctness, RampUp, ResponsiveMaintainer, License] =
+  const [BusFactor, Correctness, RampUp, ResponsiveMaintainer, License, PinnedDependencies] =
     await Promise.all([
       measureLatency(() => busFactorScore(count), "BusFactor"), // Bus Factor Score
       measureLatency(() => correctnessScore(data.issues), "Correctness"), // Correctness Score
@@ -85,6 +103,7 @@ export async function netScore(url: string): Promise<any> {
         "ResponsiveMaintainer"
       ), // Responsiveness Score
       measureLatency(() => licenseScore(data), "License"), // License Score
+      measureLatency(() => pinnedDependenciesScore(url), "PinnedDependencies"), // Pinned Dependencies Score
     ]);
 
   // store weights
@@ -101,6 +120,8 @@ export async function netScore(url: string): Promise<any> {
     w_r * RampUp.score +
     w_rm * ResponsiveMaintainer.score +
     w_l * License.score;
+    //add in pinned dependencies score
+  
   netScore = parseFloat(netScore.toFixed(2));
 
   // construct result object, JSONify, then return
@@ -111,11 +132,13 @@ export async function netScore(url: string): Promise<any> {
     BusFactor: BusFactor.score,
     ResponsiveMaintainer: ResponsiveMaintainer.score,
     License: License.score,
+    PinnedDependencies: PinnedDependencies.score,
     RampUp_Latency: RampUp.latency,
     Correctness_Latency: Correctness.latency,
     BusFactor_Latency: BusFactor.latency,
     ResponsiveMaintainer_Latency: ResponsiveMaintainer.latency,
     License_Latency: License.latency,
+    PinnedDependencies_Latency: PinnedDependencies.latency,
   };
 
   await info(`Processed URL: ${url}, Score: ${netScore}`);
@@ -163,6 +186,92 @@ export async function correctnessScore(IssueCount: number): Promise<number> {
   return parseFloat(correctness.toFixed(2));
 }
 
+//Check if version is pinned
+function isPinned(version: string): boolean {
+  //Trim version
+  version = version.trim();
+
+  //Pinned patterns
+  const pinnedPatterns = [
+    /^\d+\.\d+\.\d+$/,       // Exact version, e.g., "2.3.4"
+    /^\d+\.\d+$/,            // Major.Minor, e.g., "2.3"
+    /^\d+\.\d+\.(x|\*)$/,    // Wildcard patch, e.g., "2.3.x" or "2.3.*"
+    /^~\d+\.\d+\.\d+$/,      // Tilde operator, e.g., "~2.3.4"
+  ];
+
+  //Check if version matches any pinned pattern
+  return pinnedPatterns.some(pattern => pattern.test(version));
+}
+
+//calculated pinned dependencies score, using pinned dependencies from package.json
+export async function pinnedDependenciesScore(repoUrl: string): Promise<number> {
+  try {
+    //Get repo contents and package.json
+    const files: File[] = await fetchRepoContents(repoUrl);
+    const packageJson = files.find(file => file.name.toLowerCase() === 'package.json');
+
+    //If no package.json, return 0
+    if (!packageJson) {
+      return 0;
+    }
+
+    //Fetch package.json
+    const response = await fetch(packageJson.download_url, {
+      headers: {
+        Authorization: `token ${process.env.GITHUB_TOKEN}`,
+      },
+    });
+
+    //If failed to fetch package.json, throw error
+    if (!response.ok) {
+      throw new Error(`Failed to fetch package.json: ${response.statusText}`);
+    }
+
+    //Parse package.json
+    const content = await response.json();
+
+    //Get dependencies and devDependencies
+    const dependencies = content.dependencies || {};
+    const devDependencies = content.devDependencies || {};
+    const allDependencies = new Set([
+      ...Object.keys(dependencies),
+      ...Object.keys(devDependencies)
+    ]);
+
+    let totalDependencies = allDependencies.size;
+    let pinnedDependencies = 0;
+
+    //Check if dependencies are pinned
+    for (const dependency of allDependencies) {
+      const prodVersion = dependencies[dependency];
+      const devVersion = devDependencies[dependency];
+      
+      if (prodVersion && devVersion) {
+        // If dependency exists in both, check both versions
+        if (isPinned(prodVersion) && isPinned(devVersion)) {
+          pinnedDependencies++;
+        }
+      } else {
+        // Check whichever version exists
+        const version = prodVersion || devVersion;
+        if (isPinned(version)) {
+          pinnedDependencies++;
+        }
+      }
+    }
+
+    //Calculate score which is pinned dependencies / total dependencies and limited between 0 and 1
+    const score = pinnedDependencies / totalDependencies;
+
+    //Return score rounded to 2 decimal places
+    return parseFloat(score.toFixed(2));
+  }
+  catch (error) {
+    await info(`Error calculating pinned dependencies score: ${error.message}`);
+    return 0; //Return 0 if there's an error
+  }
+};
+
 // analyzes presence and completness of relevant documentation
 // for new developers and return M_r(r) as specified in project plan
 export async function rampUpScore(repoUrl: string): Promise<number> {
@@ -176,10 +285,11 @@ export async function rampUpScore(repoUrl: string): Promise<number> {
     const files: File[] = await fetchRepoContents(repoUrl); // Changed `any` to `File[]`
 
     // Here check for the presence of common files and directories, we can expand on this...
-    // Check for README.md
+    
+    //Check for README.md
     const readmeExists = files.some(
       (file: File) => file.name.toLowerCase() === "readme.md"
-    ); // Changed `any` to `File`
+    ); 
     if (readmeExists) {
       documentationScore += 1;
     }
