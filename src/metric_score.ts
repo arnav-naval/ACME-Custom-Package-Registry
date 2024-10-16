@@ -120,6 +120,8 @@ export async function netScore(url: string): Promise<any> {
     w_r * RampUp.score +
     w_rm * ResponsiveMaintainer.score +
     w_l * License.score;
+    //add in pinned dependencies score
+  
   netScore = parseFloat(netScore.toFixed(2));
 
   // construct result object, JSONify, then return
@@ -130,11 +132,13 @@ export async function netScore(url: string): Promise<any> {
     BusFactor: BusFactor.score,
     ResponsiveMaintainer: ResponsiveMaintainer.score,
     License: License.score,
+    PinnedDependencies: PinnedDependencies.score,
     RampUp_Latency: RampUp.latency,
     Correctness_Latency: Correctness.latency,
     BusFactor_Latency: BusFactor.latency,
     ResponsiveMaintainer_Latency: ResponsiveMaintainer.latency,
     License_Latency: License.latency,
+    PinnedDependencies_Latency: PinnedDependencies.latency,
   };
 
   await info(`Processed URL: ${url}, Score: ${netScore}`);
@@ -182,6 +186,7 @@ export async function correctnessScore(IssueCount: number): Promise<number> {
   return parseFloat(correctness.toFixed(2));
 }
 
+//Check if version is pinned
 function isPinned(version: string): boolean {
   //Trim version
   version = version.trim();
@@ -233,25 +238,33 @@ export async function pinnedDependenciesScore(repoUrl: string): Promise<number> 
       ...Object.keys(devDependencies)
     ]);
 
-    let totalDependencies = Object.keys(allDependencies).length;
+    let totalDependencies = allDependencies.size;
     let pinnedDependencies = 0;
 
     //Check if dependencies are pinned
     for (const dependency of allDependencies) {
-      const dependencyUrl = `https://github.com/${dependency}`;
-      const dependencyData = await fetchGitHubData(dependencyUrl);
-      if (dependencyData.stargazers_count >= 1000) {
-        pinnedDependencies++;
+      const prodVersion = dependencies[dependency];
+      const devVersion = devDependencies[dependency];
+      
+      if (prodVersion && devVersion) {
+        // If dependency exists in both, check both versions
+        if (isPinned(prodVersion) && isPinned(devVersion)) {
+          pinnedDependencies++;
+        }
+      } else {
+        // Check whichever version exists
+        const version = prodVersion || devVersion;
+        if (isPinned(version)) {
+          pinnedDependencies++;
+        }
       }
     }
 
+    //Calculate score which is pinned dependencies / total dependencies and limited between 0 and 1
+    const score = pinnedDependencies / totalDependencies;
 
-    console.log(dependencies);
-    console.log(devDependencies);
-    console.log(totalDependencies);
-
-    //Return number of dependencies
-    return 1;
+    //Return score rounded to 2 decimal places
+    return parseFloat(score.toFixed(2));
   }
   catch (error) {
     await info(`Error calculating pinned dependencies score: ${error.message}`);
