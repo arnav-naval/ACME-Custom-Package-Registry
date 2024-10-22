@@ -1,4 +1,8 @@
 import * as fs from "fs/promises";
+import dotenv from "dotenv";
+
+// Load environment variables from .env file
+dotenv.config();
 
 // Define log levels
 enum LogLevel {
