@@ -3,7 +3,6 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import express from "express";
 import { info, debug, silent } from "./logger.js";
-import { generateUploadUrl } from "./controllers/packageController.js";
 
 //Function to process a URL and calculate its Netscore
 async function processUrl(url: string) {
