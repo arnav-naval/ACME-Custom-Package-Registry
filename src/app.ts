@@ -1,8 +1,11 @@
 import * as ms from "./metric_score.js";
 import * as fs from "fs/promises";
 import * as path from "path";
+import express from "express";
 import { info, debug, silent } from "./logger.js";
+import { generateUploadUrl } from "./controllers/packageController.js";
 
+//Function to process a URL and calculate its Netscore
 async function processUrl(url: string) {
   try {
     const startTime = Date.now();
@@ -19,6 +22,7 @@ async function processUrl(url: string) {
       ResponsiveMaintainer: score.ResponsiveMaintainer,
       License: score.License,
       PinnedDependencies: score.PinnedDependencies,
+      PRReview: score.PRReview,
       NetScore_Latency: netScoreLatency,
       RampUp_Latency: score.RampUp_Latency,
       Correctness_Latency: score.Correctness_Latency,
@@ -26,6 +30,7 @@ async function processUrl(url: string) {
       ResponsiveMaintainer_Latency: score.ResponsiveMaintainer_Latency,
       License_Latency: score.License_Latency,
       PinnedDependencies_Latency: score.PinnedDependencies_Latency,
+      PRReview_Latency: score.PRReview_Latency,
     };
     return ret;
   } catch (err) {
@@ -34,6 +39,7 @@ async function processUrl(url: string) {
   }
 }
 
+//Main function to process URLs from a file or command line arguments
 export async function main(testFile?: string) {
   await info("Program started");
   // check if filename provided
@@ -54,10 +60,10 @@ export async function main(testFile?: string) {
     const urls = fileContent.split("\n").filter((line) => line.trim() !== "");
     await info(`Processing ${urls.length} URLs from file: ${filename}`);
 
-    // Process all URLs in parallel
+    // Process all URLs in parallel (concurrently)
     const results = await Promise.all(urls.map((url) => processUrl(url)));
 
-    // Prep NDJSON output
+    // Prepare NDJSON output
     ndjsonOutput = results.map((result) => JSON.stringify(result)).join("\n");
 
     // print output to console
@@ -74,6 +80,7 @@ export async function main(testFile?: string) {
     }
   }
 }
+
 
 // Only call main if this file is being run directly outside of Jasmine
 if (

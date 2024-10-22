@@ -1,4 +1,8 @@
 import { info, debug, silent } from "./logger.js";
+import dotenv from "dotenv";
+
+// Load environment variables from .env file
+dotenv.config();
 
 //Declare file interface
 interface File {
@@ -29,7 +33,6 @@ const measureLatency = async (fn: () => Promise<any>, label: string) => {
 // takes as input URL and returns a score
 export async function netScore(url: string): Promise<any> {
   let data, openIssues, closedIssues;
-
   // convert npm URL to GitHub URL
   if (url.includes("npmjs.com")) {
     try {
@@ -93,7 +96,7 @@ export async function netScore(url: string): Promise<any> {
   }
 
   // Calculate all metrics in parallel
-  const [BusFactor, Correctness, RampUp, ResponsiveMaintainer, License, PinnedDependencies] =
+  const [BusFactor, Correctness, RampUp, ResponsiveMaintainer, License, PinnedDependencies, PRReview] =
     await Promise.all([
       measureLatency(() => busFactorScore(count), "BusFactor"), // Bus Factor Score
       measureLatency(() => correctnessScore(data.issues), "Correctness"), // Correctness Score
@@ -104,6 +107,7 @@ export async function netScore(url: string): Promise<any> {
       ), // Responsiveness Score
       measureLatency(() => licenseScore(data), "License"), // License Score
       measureLatency(() => pinnedDependenciesScore(url), "PinnedDependencies"), // Pinned Dependencies Score
+      measureLatency(() => pullRequestReviewScore(url), "PRReview"), // Pull Request Review Score
     ]);
 
   // store weights
@@ -121,6 +125,7 @@ export async function netScore(url: string): Promise<any> {
     w_rm * ResponsiveMaintainer.score +
     w_l * License.score;
     //add in pinned dependencies score
+    //add in PR review score
   
   netScore = parseFloat(netScore.toFixed(2));
 
@@ -133,12 +138,14 @@ export async function netScore(url: string): Promise<any> {
     ResponsiveMaintainer: ResponsiveMaintainer.score,
     License: License.score,
     PinnedDependencies: PinnedDependencies.score,
+    PRReview: PRReview.score,
     RampUp_Latency: RampUp.latency,
     Correctness_Latency: Correctness.latency,
     BusFactor_Latency: BusFactor.latency,
     ResponsiveMaintainer_Latency: ResponsiveMaintainer.latency,
     License_Latency: License.latency,
     PinnedDependencies_Latency: PinnedDependencies.latency,
+    PRReview_Latency: PRReview.latency,
   };
 
   await info(`Processed URL: ${url}, Score: ${netScore}`);
@@ -271,6 +278,64 @@ export async function pinnedDependenciesScore(repoUrl: string): Promise<number> 
     return 0; //Return 0 if there's an error
   }
 };
+
+//Calculates PR review score
+export async function pullRequestReviewScore(repoUrl: string): Promise<number> {
+  try {
+    // Extract owner and repo from repoUrl
+    const [owner, repo] = repoUrl.split("github.com/")[1].split("/").map(part => part.trim());
+    if (!owner || !repo) throw new Error("Invalid GitHub repository path");
+
+    // Initialize mergedPRs array and set maxPRs to 100
+    const mergedPRs: any[] = [];
+    const maxPRs = 100; // Reduced limit to 100 PRs
+
+    // Fetch merged PRs up to maxPRs
+    const response = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/pulls?state=closed&per_page=${maxPRs}`,
+      {
+        headers: {
+          Authorization: `token ${process.env.GITHUB_TOKEN}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    //Throw error if failed to fetch PRs
+    if (!response.ok) throw new Error(`Failed to fetch PRs: ${response.statusText}`);
+
+    //Fetch PRs and add merged PRs to mergedPRs array
+    const prs = await response.json();
+    mergedPRs.push(...prs.filter(pr => pr.merged_at !== null).slice(0, maxPRs));
+
+    let prsWithReviews = 0;
+    const batchSize = 10; // Process in smaller batches
+
+    //Process PRs in batches
+    for (let i = 0; i < mergedPRs.length; i += batchSize) {
+      const batch = mergedPRs.slice(i, i + batchSize);
+      const reviewPromises = batch.map(pr =>
+        fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${pr.number}/reviews`, {
+          headers: {
+            Authorization: `token ${process.env.GITHUB_TOKEN}`,
+            'Content-Type': 'application/json',
+          },
+        }).then(res => res.json())
+      );
+
+      //Fetch reviews and add to prsWithReviews if reviews are present
+      const batchReviews = await Promise.all(reviewPromises);
+      prsWithReviews += batchReviews.filter(reviews => reviews.length > 0).length;
+    }
+
+    //Calculate score which is number of PRs with reviews / total number of PRs
+    const score = mergedPRs.length > 0 ? prsWithReviews / mergedPRs.length : 0;
+    return parseFloat(score.toFixed(2));
+  } catch (error) {
+    await info(`Error in pullRequestReviewScore: ${error.message}`);
+    return 0;
+  }
+}
 
 // analyzes presence and completness of relevant documentation
 // for new developers and return M_r(r) as specified in project plan
@@ -408,40 +473,34 @@ export async function fetchGitHubData(url: string) {
 
   if (!githubToken) {
     throw new Error("GITHUB_TOKEN is not set in the environment");
-    process.exit(1);
   }
-
   // Construct the GitHub API URL
   const apiUrl = `https://api.github.com/repos/${owner}/${repo}`;
-  try {
-    const response = await fetch(apiUrl, {
-      headers: {
-        Authorization: `token ${githubToken}`,
-      },
-    });
 
-    // Check if the response is OK (status code 200-299)
-    if (!response.ok) {
-      throw new Error(`GitHub API error: ${response.statusText}`);
-    }
-
-    // Parse the JSON response
-    const data = await response.json();
-
-    // Extract relevant information if needed
-    const result = {
-      stars: data.stargazers_count,
-      forks: data.forks_count,
-      issues: data.open_issues_count,
-      license: data.license ? data.license.name : "No license",
-      updated_at: data.updated_at,
-      contributors_count: data.contributors_url,
-    };
-
-    return result;
-  } catch (error) {
-    throw error; // Re-throw the error to be handled by the caller
+  const response = await fetch(apiUrl, {
+    headers: {
+      Authorization: `token ${githubToken}`,
+    },
+  });
+  
+  // Check if the response is OK (status code 200-299)
+  if (!response.ok) {
+    throw new Error(`GitHub API error: ${response.statusText}`);
   }
+
+  // Parse the JSON response
+  const data = await response.json();
+  // Extract relevant information if needed
+  const result = {
+    stars: data.stargazers_count,
+    forks: data.forks_count,
+    issues: data.open_issues_count,
+    license: data.license ? data.license.name : "No license",
+    updated_at: data.updated_at,
+    contributors_count: data.contributors_url,
+  };
+
+  return result;
 }
 
 // Define function to get issues data from GitHub URL (last 3 months)
@@ -466,25 +525,21 @@ export async function fetchIssues(url: string) {
   const openIssuesURL = `https://api.github.com/repos/${owner}/${repo}/issues?state=open&since=${lastMonthDate}`;
   const closedIssuesURL = `https://api.github.com/repos/${owner}/${repo}/issues?state=closed&since=${lastMonthDate}`;
 
-  try {
-    const openResponse = await fetch(openIssuesURL, {
-      headers: {
-        Authorization: `token ${process.env.GITHUB_TOKEN}`,
-      },
-    });
-    const closedResponse = await fetch(closedIssuesURL, {
-      headers: {
-        Authorization: `token ${process.env.GITHUB_TOKEN}`,
-      },
-    });
+  const openResponse = await fetch(openIssuesURL, {
+    headers: {
+      Authorization: `token ${process.env.GITHUB_TOKEN}`,
+    },
+  });
+  const closedResponse = await fetch(closedIssuesURL, {
+    headers: {
+      Authorization: `token ${process.env.GITHUB_TOKEN}`,
+    },
+  });
 
-    const openIssues = await openResponse.json();
-    const closedIssues = await closedResponse.json();
+  const openIssues = await openResponse.json();
+  const closedIssues = await closedResponse.json();
 
-    return [openIssues, closedIssues];
-  } catch (error) {
-    throw error; // Re-throw the error to be handled by the caller
-  }
+  return [openIssues, closedIssues];
 }
 
 // function for getting the number of contributors from a GitHub repo
@@ -493,20 +548,16 @@ export async function fetchCollaboratorsCount(url: string): Promise<any[]> {
     throw new Error("Invalid contributors count URL");
   }
 
-  try {
-    const response = await fetch(url, {
-      headers: {
-        Authorization: `token ${process.env.GITHUB_TOKEN}`,
-      },
-    });
-    if (!response.ok) {
-      throw new Error(`GitHub API error: ${response.statusText}`);
-    }
-    const contributors = await response.json();
-    return contributors;
-  } catch (error) {
-    throw error; // Re-throw the error to be handled by the caller
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `token ${process.env.GITHUB_TOKEN}`,
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`GitHub API error: ${response.statusText}`);
   }
+  const contributors = await response.json();
+  return contributors;
 }
 
 // Fetch repo contents
@@ -517,18 +568,16 @@ export async function fetchRepoContents(url: string): Promise<File[]> {
   const [owner, repo] = repoPath.split("/");
   const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents`;
 
-  try {
-    const response = await fetch(apiUrl, {
-      headers: {
-        Authorization: `token ${process.env.GITHUB_TOKEN}`,
-      },
-    });
-    if (!response.ok) {
-      throw new Error(`GitHub API error: ${response.statusText}`);
-    }
-    const files: File[] = await response.json();
-    return files;
-  } catch (error) {
-    throw error;
+  const response = await fetch(apiUrl, {
+    headers: {
+      Authorization: `token ${process.env.GITHUB_TOKEN}`,
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`GitHub API error: ${response.statusText}`);
   }
+  
+  const files: File[] = await response.json();
+  return files;
 }
+
