@@ -25,6 +25,8 @@ log.txt
 jspm_packages/
 bower_components/
 
+deployment.zip
+
 # Testing
 coverage/
 .nyc_output
