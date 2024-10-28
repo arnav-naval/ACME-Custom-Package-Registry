@@ -43,13 +43,13 @@ export const uploadPackageToS3 = async (event: APIGatewayProxyEvent): Promise<AP
   }
 
   // Define the S3 key for the package
-  const s3Key = `${fileName}/${fileVersion}`;
+  const s3Key = `${URL}`;
 
   // Define S3 parameters for the presigned URL
   const putObjectParams = {
     Bucket: process.env.BUCKET_NAME,
     Key: s3Key,
-    Body: content,
+    Body: Content,
     ContentType: 'text/plain',
   };
 
@@ -57,7 +57,7 @@ export const uploadPackageToS3 = async (event: APIGatewayProxyEvent): Promise<AP
   try {
     const command = new PutObjectCommand(putObjectParams);
     await s3.send(command);
-    console.info(`Uploaded package ${fileName} to S3`);
+    console.info(`Uploaded package to S3`);
     return {
       statusCode: 200,
       body: JSON.stringify({ message: 'Package uploaded successfully' }),
