@@ -2,7 +2,9 @@ name: CI/CD for lambda function
 
 on:
   push:
-    branches: [ features/upload-package, main]
+    branches:
+      - 'features/upload-package'
+      - main
   pull_request:
     branches: [ main ]
 
