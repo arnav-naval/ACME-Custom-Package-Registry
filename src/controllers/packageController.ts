@@ -1,8 +1,6 @@
 //package controller to define functionality for routes for uploading and downloading packages
-import { Request, Response } from 'express';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { info, debug } from '../logger.js';
+import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import dotenv from 'dotenv';
 
 // Load environment variables from .env file
@@ -10,49 +8,65 @@ dotenv.config();
 
 //initialize S3 client
 const s3 = new S3Client({
-    credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-    },
     region: process.env.AWS_REGION,
 });
 
 // Define interface for the query parameters for the generateUploadUrl function
-interface UploadUrlQuery {
-  fileName?: string;
-  fileType?: string;
+interface UploadPackageBody {
+  URL?: string;
+  Content?: string;
+  JSProgram?: string;
 }
 
-// Function to generate a presigned URL for uploading a package
-export const generateUploadUrl = async (req: Request<Record<string, never>, Record<string, never>, Record<string, never>, UploadUrlQuery>, res: Response): Promise<void> => {
-  await info('Generating upload URL');
-  // Extract fileName and fileType from the query parameters
-  const { fileName, fileType } = req.query;
+// function to upload a package to S3
+export const uploadPackageToS3 = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  console.log('Uploading package to S3');
 
-  // Check if fileName and fileType are provided
-  if (!fileName || !fileType) {
-    await info('Missing fileName or fileType in query');
-    res.status(400).json({ error: 'Missing fileName or fileType' });
-    return;
+  // Check if the request body is missing
+  if (!event.body) {
+    console.log('Missing request body');
+    return {
+      statusCode: 400,
+      body: JSON.stringify({ error: 'Missing request body' }),
+    };
   }
+
+  // Parse the request body
+  const { URL, Content, JSProgram } = JSON.parse(event.body) as UploadPackageBody;
+
+  if (!URL && !Content && !JSProgram) {
+    console.log('Missing URL or Contentin request body');
+    return {
+      statusCode: 400,
+      body: JSON.stringify({ error: 'Missing URL or content in request body' }),
+    };
+  }
+
+  // Define the S3 key for the package
+  const s3Key = `${fileName}/${fileVersion}`;
 
   // Define S3 parameters for the presigned URL
   const putObjectParams = {
     Bucket: process.env.BUCKET_NAME,
-    Key: fileName,
-    ContentType: fileType,
+    Key: s3Key,
+    Body: content,
+    ContentType: 'text/plain',
   };
 
-  // Generate the presigned URL
+  // Upload the package to S3
   try {
     const command = new PutObjectCommand(putObjectParams);
-    const url = await getSignedUrl(s3, command, {
-        expiresIn: 60,
-    });
-    await debug(`Generated upload URL for ${fileName}`);
-    res.status(200).json({ url });
+    await s3.send(command);
+    console.info(`Uploaded package ${fileName} to S3`);
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ message: 'Package uploaded successfully' }),
+    };
   } catch (err) {
-    await info(`Error generating upload URL: ${err.message}`);
-    res.status(500).json({ error: 'Error generating upload URL' });
+    console.log(`Error uploading package to S3: ${err.message}`);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: 'Error uploading package to S3' }),
+    };
   }
 };
