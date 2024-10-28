@@ -4,6 +4,7 @@ import { Context } from 'aws-lambda';
 
 
 export const handler: APIGatewayProxyHandler = async (event, context: Context) => {
+  console.log('CI worked');
   try {
     return await uploadPackageToS3(event);
   } catch (error) {
