@@ -13,15 +13,16 @@ const s3 = new S3Client({
 
 // Define interface for the query parameters for the generateUploadUrl function
 interface UploadPackageBody {
-  fileName: string;
-  fileVersion: string;
-  content: string;
+  URL?: string;
+  Content?: string;
+  JSProgram?: string;
 }
 
-// Lambda function to generate a presigned URL for uploading a package
+// function to upload a package to S3
 export const uploadPackageToS3 = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   console.log('Uploading package to S3');
 
+  // Check if the request body is missing
   if (!event.body) {
     console.log('Missing request body');
     return {
@@ -30,13 +31,14 @@ export const uploadPackageToS3 = async (event: APIGatewayProxyEvent): Promise<AP
     };
   }
 
-  const { fileName, fileVersion, content } = JSON.parse(event.body) as UploadPackageBody;
+  // Parse the request body
+  const { URL, Content, JSProgram } = JSON.parse(event.body) as UploadPackageBody;
 
-  if (!fileName || !fileVersion || !content) {
-    console.log('Missing fileName, fileVersion, or content in request body');
+  if (!URL && !Content && !JSProgram) {
+    console.log('Missing URL or Contentin request body');
     return {
       statusCode: 400,
-      body: JSON.stringify({ error: 'Missing fileName, fileVersion, or content' }),
+      body: JSON.stringify({ error: 'Missing URL or content in request body' }),
     };
   }
 

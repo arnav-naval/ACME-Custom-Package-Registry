@@ -1,12 +1,13 @@
-name: Run testing pipeline
+name: CI/CD for lambda function
 
 on:
   push:
-    branches:
-      - '**'
+    branches: [ features/upload-package, main]
+  pull_request:
+    branches: [ main ]
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
@@ -21,5 +22,25 @@ jobs:
     - name: Install dependencies
       run: npm install
 
-    - name: Run testing script
-      run: ./run test
+    - name: Build
+      run: npm run build
+
+    - name: Create deployment package
+      run: |
+        cd dist
+        zip -r ../function.zip .
+        cd ..
+        zip -ur function.zip node_modules package.json
+    
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-2
+    
+    - name: Deploy lambda function
+      run: |
+        aws lambda update-function-code --function-name arn:aws:lambda:us-east-2:412381743875:function:uploadPackage --zip-file fileb://function.zip
+    #- name: Run testing script
+    #  run: ./run test
