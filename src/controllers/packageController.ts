@@ -11,11 +11,22 @@ const s3 = new S3Client({
     region: process.env.AWS_REGION,
 });
 
-// Define interface for the query parameters for the generateUploadUrl function
-interface UploadPackageBody {
-  URL?: string;
+//Interface for the request body of PackageData
+interface PackageData {
   Content?: string;
-  JSProgram?: string;
+  URL?: string;
+  JSProgram: string;
+}
+
+interface PackageMetadata {
+  Name: string;
+  Version: string;
+  ID: string;
+}
+
+interface PackageResponse {
+  metadata: PackageMetadata;
+  data: PackageData;
 }
 
 //Function to upload a base64 encoded zip file to S3
@@ -43,7 +54,7 @@ export const uploadBase64ZipToS3 = async (base64String: string, s3Key: string): 
 };
 
 //Function to process the request body of URL, Content, and JSProgram
-const validateRequestBody = (body: UploadPackageBody): { isValid: boolean, error?: string } => {
+const validateRequestBody = (body: PackageData): { isValid: boolean, error?: string } => {
   //Check if all required fields are presen
   if (!body.URL && !body.Content && !body.JSProgram) {
     return {
@@ -84,55 +95,111 @@ const validateRequestBody = (body: UploadPackageBody): { isValid: boolean, error
 }
 
 
-
 // function to upload a package to S3
 export const uploadPackageToS3 = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-  // Check if the request body is missing
-  if (!event.body) {
-    console.log('Missing request body');
-    return {
-      statusCode: 400,
-      body: JSON.stringify({ error: 'Missing request body' }),
-    };
-  }
-
-  // Parse the request body
-  const requestBody = JSON.parse(event.body) as UploadPackageBody;
-  const validationResult = validateRequestBody(requestBody);
-
-  //If validation fails, return the error message
-  if (!validationResult.isValid) {
-    return {
-      statusCode: 400,
-      body: JSON.stringify({ error: validationResult.error }),
-    };
-  }
-
-  // Define the S3 key for the package
-  const s3Key = `${requestBody.URL}`;
-
-  // Define S3 parameters for the presigned URL
-  const putObjectParams = {
-    Bucket: process.env.BUCKET_NAME,
-    Key: s3Key,
-    Body: "tester",
-    ContentType: 'text/plain',
-  };
-
-  // Upload the package to S3
   try {
-    const command = new PutObjectCommand(putObjectParams);
-    await s3.send(command);
-    console.info(`Uploaded package to S3`);
+    //Check if request body is missing
+    if (!event.body) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: 'Missing request body' }),
+      };
+    }
+
+    //Parse the request body
+    const requestBody = JSON.parse(event.body) as PackageData;
+    const validationResult = validateRequestBody(requestBody);
+
+    //Check if validation fails
+    if (!validationResult.isValid) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: validationResult.error }),
+      };
+    }
+
+    // TODO: Check if package exists
+    // if (packageExists) {
+    //   return {
+    //     statusCode: 409,
+    //     body: JSON.stringify({ error: 'Package exists already' })
+    //   };
+    // }
+
+    // TODO: Check package rating
+    // if (packageRatingDisqualified) {
+    //   return {
+    //     statusCode: 424,
+    //     body: JSON.stringify({ error: 'Package is not uploaded due to the disqualified rating' })
+    //   };
+    // }
+
+    //Generate metadata
+    const metadata = {
+      Name: "extracted-name",
+      Version: "extracted-version",
+      ID: "generated-id"
+    };
+
+    //Upload the base 64 zip to S3 if Content is provided
+    if (requestBody.Content) {
+      const s3Key = "testingkey";
+      await uploadBase64ZipToS3(requestBody.Content, s3Key);
+    }
+
+    //Return the successful response
     return {
-      statusCode: 200,
-      body: JSON.stringify({ message: 'Package uploaded successfully' }),
+      statusCode: 201,
+      body: JSON.stringify({
+        metadata,
+        data: requestBody
+      })
     };
   } catch (err) {
-    console.log(`Error uploading package to S3: ${err.message}`);
+    //Internal server error
+    console.error(`Error processing package upload: ${err.message}`);
+    return {
+      statusCode: 500, //change to 400 as per spec
+      body: JSON.stringify({ error: 'Error processing package upload' }),
+    };
+  }
+};
+
+//Function to generate S3 key
+const generateS3Key = (url: string): string => {
+  return "";
+};
+
+//Function to handle the base64 upload
+export const handleBase64Upload = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  try {
+    if (!event.body) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: 'Missing request body' })
+      };
+    }
+
+    const { base64Content, key } = JSON.parse(event.body);
+    
+    if (!base64Content || !key) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: 'Missing required fields: base64Content or key' })
+      };
+    }
+
+    await uploadBase64ZipToS3(base64Content, key);
+    
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ message: 'Package uploaded successfully' })
+    };
+  } catch (error) {
+    console.error('Error handling base64 upload:', error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: 'Error uploading package to S3' }),
+      body: JSON.stringify({ error: 'Internal server error' })
     };
   }
 };

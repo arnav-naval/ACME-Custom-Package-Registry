@@ -1,4 +1,4 @@
-import { uploadPackageToS3 } from '../controllers/packageController.js';
+import { uploadPackageToS3, uploadBase64ZipToS3 } from '../controllers/packageController.js';
 import { APIGatewayProxyHandler } from 'aws-lambda';
 import { Context } from 'aws-lambda';
 
