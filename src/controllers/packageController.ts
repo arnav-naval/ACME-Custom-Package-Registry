@@ -18,10 +18,75 @@ interface UploadPackageBody {
   JSProgram?: string;
 }
 
+//Function to upload a base64 encoded zip file to S3
+export const uploadBase64ZipToS3 = async (base64String: string, s3Key: string): Promise<void> => {
+  try {
+    //Decode base64 string to buffer
+    const buffer = Buffer.from(base64String, 'base64');
+
+    //Set up s3 upload parameters
+    const putObjectParams = {
+      Bucket: process.env.BUCKET_NAME,
+      Key: s3Key,
+      Body: buffer,
+      ContentType: 'application/zip',
+    };
+
+    //Upload the buffer to S3
+    const command = new PutObjectCommand(putObjectParams);
+    await s3.send(command);
+    console.info(`Uploaded base64 encoded zip file to S3`);
+  } catch (err) {
+    console.error(`Error uploading base64 encoded zip file to S3: ${err.message}`);
+    throw err;
+  }
+};
+
+//Function to process the request body of URL, Content, and JSProgram
+const validateRequestBody = (body: UploadPackageBody): { isValid: boolean, error?: string } => {
+  //Check if all required fields are presen
+  if (!body.URL && !body.Content && !body.JSProgram) {
+    return {
+      isValid: false,
+      error: 'Missing required fields: URL, Content, or JSProgram',
+    };
+  }
+
+   // Check if either URL or Content is provided
+   if (!body.URL && !body.Content) {
+    return {
+      isValid: false,
+      error: 'Missing required fields: Must provide either URL or Content',
+    };
+  }
+
+  //Check if JSProgram is provided
+  if (!body.JSProgram) {
+    return {
+      isValid: false,
+      error: 'Missing required fields: JSProgram',
+    };
+  }
+
+  // Check if both URL and Content are provided (not allowed)
+  if (body.URL && body.Content) {
+    return {
+      isValid: false,
+      error: 'Cannot provide both URL and Content fields',
+    };
+  }
+
+  //If all checks pass, return true
+  return {
+    isValid: true,
+  };
+  
+}
+
+
+
 // function to upload a package to S3
 export const uploadPackageToS3 = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-  console.log('Uploading package to S3');
-
   // Check if the request body is missing
   if (!event.body) {
     console.log('Missing request body');
@@ -32,24 +97,25 @@ export const uploadPackageToS3 = async (event: APIGatewayProxyEvent): Promise<AP
   }
 
   // Parse the request body
-  const { URL, Content, JSProgram } = JSON.parse(event.body) as UploadPackageBody;
+  const requestBody = JSON.parse(event.body) as UploadPackageBody;
+  const validationResult = validateRequestBody(requestBody);
 
-  if (!URL && !Content && !JSProgram) {
-    console.log('Missing URL or Contentin request body');
+  //If validation fails, return the error message
+  if (!validationResult.isValid) {
     return {
       statusCode: 400,
-      body: JSON.stringify({ error: 'Missing URL or content in request body' }),
+      body: JSON.stringify({ error: validationResult.error }),
     };
   }
 
   // Define the S3 key for the package
-  const s3Key = `${URL}`;
+  const s3Key = `${requestBody.URL}`;
 
   // Define S3 parameters for the presigned URL
   const putObjectParams = {
     Bucket: process.env.BUCKET_NAME,
     Key: s3Key,
-    Body: Content,
+    Body: "tester",
     ContentType: 'text/plain',
   };
 
