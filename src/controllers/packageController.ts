@@ -41,6 +41,7 @@ export const uploadBase64ZipToS3 = async (base64String: string, s3Key: string): 
       Key: s3Key,
       Body: buffer,
       ContentType: 'application/zip',
+      ContentEncoding: 'base64',
     };
 
     //Upload the buffer to S3
@@ -143,7 +144,7 @@ export const uploadPackageToS3 = async (event: APIGatewayProxyEvent): Promise<AP
 
     //Upload the base 64 zip to S3 if Content is provided
     if (requestBody.Content) {
-      const s3Key = "testingkey";
+      const s3Key = "testingkey2";
       await uploadBase64ZipToS3(requestBody.Content, s3Key);
     }
 
