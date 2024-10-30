@@ -2,6 +2,7 @@
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import dotenv from 'dotenv';
+import AdmZip from 'adm-zip';
 
 // Load environment variables from .env file
 dotenv.config();
@@ -30,15 +31,24 @@ interface PackageResponse {
 }
 
 //Function to upload a base64 encoded zip file to S3
-export const uploadBase64ZipToS3 = async (base64String: string, s3Key: string): Promise<void> => {
+export const uploadBase64ZipToS3 = async (base64String: string): Promise<void> => {
   try {
     //Decode base64 string to buffer
     const buffer = Buffer.from(base64String, 'base64');
 
+    //Create a zip object from the buffer
+    const zip = new AdmZip(buffer);
+
+    //Fetch the name and version from the package.json
+    const { name, version } = fetchPackageJson(zip);
+
+    //Generate the S3 key
+    const s3Key = generateS3Key(name, version);
+
     //Set up s3 upload parameters
     const putObjectParams = {
       Bucket: process.env.BUCKET_NAME,
-      Key: `${s3Key}.zip`,
+      Key: s3Key,
       Body: buffer,
       'Content-Type': 'application/zip',
     };
@@ -52,6 +62,44 @@ export const uploadBase64ZipToS3 = async (base64String: string, s3Key: string): 
     throw err;
   }
 };
+
+//Function to fetch the package.json from the zip file and throw an error if it is not found  
+export const fetchPackageJson = (zip: AdmZip): { name: string, version: string } => {
+  //Get all entries from the zip file
+  const zipEntries = zip.getEntries();
+
+  //Find the package.json entry
+  const packageJsonEntry = zipEntries.find(entry => entry.entryName === 'package.json');
+
+  //Throw an error if package.json is not found
+  if (!packageJsonEntry) {
+    throw new Error('Package.json not found in the zip file');
+  }
+ 
+  //Get the content of the package.json entry
+  const packageJsonContent = packageJsonEntry.getData().toString('utf8');
+  //Return the parsed package.json content
+  const packageJson = JSON.parse(packageJsonContent);
+
+  //If version is not present, sei it to "1.0.0"
+  let version;
+  if (!packageJson.version) {
+    version = "1.0.0";
+  } else {
+    version = packageJson.version;
+  }
+
+  //If name is not present, throw an error
+  if (!packageJson.name) {
+    throw new Error('Name is not present in the package.json file');
+  }
+
+  //Return the name and version
+  return {
+    name: packageJson.name,
+    version: version,
+  };
+}
 
 //Function to process the request body of URL, Content, and JSProgram
 const validateRequestBody = (body: PackageData): { isValid: boolean, error?: string } => {
@@ -143,8 +191,7 @@ export const uploadPackageToS3 = async (event: APIGatewayProxyEvent): Promise<AP
 
     //Upload the base 64 zip to S3 if Content is provided
     if (requestBody.Content) {
-      const s3Key = "testingkey3";
-      await uploadBase64ZipToS3(requestBody.Content, s3Key);
+      await uploadBase64ZipToS3(requestBody.Content);
     }
 
     //Return the successful response
@@ -166,8 +213,8 @@ export const uploadPackageToS3 = async (event: APIGatewayProxyEvent): Promise<AP
 };
 
 //Function to generate S3 key
-const generateS3Key = (url: string): string => {
-  return "";
+const generateS3Key = (name: string, version: string): string => {
+  return `${name}-${version}`;
 };
 
 //Function to handle the base64 upload
@@ -189,7 +236,7 @@ export const handleBase64Upload = async (event: APIGatewayProxyEvent): Promise<A
       };
     }
 
-    await uploadBase64ZipToS3(base64Content, key);
+    await uploadBase64ZipToS3(base64Content);
     
     return {
       statusCode: 200,
