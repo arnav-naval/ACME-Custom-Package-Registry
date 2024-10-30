@@ -61,6 +61,7 @@ export const uploadBase64ZipToS3 = async (base64String: string): Promise<void> =
     console.error(`Error uploading base64 encoded zip file to S3: ${err.message}`);
     throw err;
   }
+  
 };
 
 //Function to fetch the package.json from the zip file and throw an error if it is not found  
@@ -68,8 +69,13 @@ export const fetchPackageJson = (zip: AdmZip): { name: string, version: string }
   //Get all entries from the zip file
   const zipEntries = zip.getEntries();
 
-  //Find the package.json entry
-  const packageJsonEntry = zipEntries.find(entry => entry.entryName === 'package.json');
+  //First try to find root-level package.json
+  let packageJsonEntry = zipEntries.find(entry => entry.entryName === 'package.json');
+
+  //If not found at root, look for any package.json
+  if (!packageJsonEntry) {
+    packageJsonEntry = zipEntries.find(entry => entry.entryName.endsWith('package.json'));
+  }
 
   //Throw an error if package.json is not found
   if (!packageJsonEntry) {
