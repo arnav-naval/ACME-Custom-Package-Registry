@@ -48,9 +48,8 @@ export const uploadBase64ZipToS3 = async (base64String: string): Promise<void> =
     //Set up s3 upload parameters
     const putObjectParams = {
       Bucket: process.env.BUCKET_NAME,
-      Key: s3Key,
+      Key: `${s3Key}.zip`, //only adding zip to key changes file type in S3 bucket
       Body: buffer,
-      'Content-Type': 'application/zip',
     };
 
     //Upload the buffer to S3
