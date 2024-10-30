@@ -28,7 +28,7 @@ jobs:
       run: npm run build
 
     - name: Rename handler file
-      run: mv dist/src/handlers/lambdaHandler.js dist/src/handlers/lambdaHandler.mjs
+      run: mv dist/handlers/lambdaHandler.js dist/handlers/lambdaHandler.mjs
 
     - name: Create deployment package
       run: |
