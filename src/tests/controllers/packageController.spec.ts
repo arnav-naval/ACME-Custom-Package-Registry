@@ -1,5 +1,5 @@
 import { S3Client, PutObjectCommand, PutObjectCommandOutput } from '@aws-sdk/client-s3';
-import { uploadBase64ZipToS3, fetchPackageJson } from '../../controllers/packageController';
+import { uploadBase64ZipToS3, fetchPackageJson, getGithubUrlFromUrl } from '../../controllers/packageController.js';
 import AdmZip from 'adm-zip';
 
 describe('packageController', () => {
@@ -155,6 +155,93 @@ describe('packageController', () => {
 
       expect(() => fetchPackageJson(zip))
         .toThrow(jasmine.any(SyntaxError));
+    });
+  });
+
+  describe('getGithubUrlFromUrl', () => {
+    let fetchSpy: jasmine.Spy;
+
+    beforeEach(() => {
+      fetchSpy = spyOn(global, 'fetch');
+      spyOn(console, 'info');
+    });
+
+    it('should return github url unchanged', async () => {
+      const githubUrl = 'https://github.com/username/repo';
+      const result = await getGithubUrlFromUrl(githubUrl);
+      console.info('GitHub URL:', result);
+      expect(result).toBe(githubUrl);
+    });
+
+    it('should convert npm url to github url', async () => {
+      const npmUrl = 'https://www.npmjs.com/package/express';
+      const expectedGithubUrl = 'https://github.com/expressjs/express';
+
+      fetchSpy.and.resolveTo({
+        ok: true,
+        json: () => Promise.resolve({
+          repository: {
+            url: 'git+https://github.com/expressjs/express.git'
+          }
+        })
+      } as Response);
+
+      const result = await getGithubUrlFromUrl(npmUrl);
+      console.info('Converted GitHub URL:', result);
+      expect(result).toBe(expectedGithubUrl);
+      expect(fetchSpy).toHaveBeenCalledWith('https://registry.npmjs.org/express');
+    });
+
+    it('should throw error for invalid npm url', async () => {
+      const invalidNpmUrl = 'https://www.npmjs.com/invalid';
+      
+      await expectAsync(getGithubUrlFromUrl(invalidNpmUrl))
+        .toBeRejectedWithError('Invalid npm URL');
+      expect(console.info).toHaveBeenCalledWith('Error fetching npm data');
+    });
+
+    it('should throw error when npm API fails', async () => {
+      const npmUrl = 'https://www.npmjs.com/package/express';
+
+      fetchSpy.and.resolveTo({
+        ok: false,
+        statusText: 'Not Found'
+      } as Response);
+
+      await expectAsync(getGithubUrlFromUrl(npmUrl))
+        .toBeRejectedWithError('Error fetching npm data: npm API error: Not Found');
+      expect(console.info).toHaveBeenCalledWith('Error fetching npm data');
+    });
+
+    it('should throw error when no repository URL found', async () => {
+      const npmUrl = 'https://www.npmjs.com/package/express';
+
+      fetchSpy.and.resolveTo({
+        ok: true,
+        json: () => Promise.resolve({})
+      } as Response);
+
+      await expectAsync(getGithubUrlFromUrl(npmUrl))
+        .toBeRejectedWithError('Error fetching npm data: No repository URL found in npm data');
+      expect(console.info).toHaveBeenCalledWith('No repository URL found in npm data');
+      expect(console.info).toHaveBeenCalledWith('Error fetching npm data');
+    });
+
+    it('should convert git protocol urls to https', async () => {
+      const npmUrl = 'https://www.npmjs.com/package/test-package';
+      
+      fetchSpy.and.resolveTo({
+        ok: true,
+        json: () => Promise.resolve({
+          repository: {
+            url: 'git://github.com/test/repo.git'
+          }
+        })
+      } as Response);
+
+      const result = await getGithubUrlFromUrl(npmUrl);
+      console.info('Converted git protocol URL:', result);
+      expect(result).toBe('https://github.com/test/repo');
     });
   });
 }); 

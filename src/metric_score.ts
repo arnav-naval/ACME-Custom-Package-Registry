@@ -22,6 +22,8 @@ interface File {
   };
 }
 
+
+
 // Function to calculate score and latency for each metric
 const measureLatency = async (fn: () => Promise<any>, label: string) => {
   const start = Date.now();
@@ -70,7 +72,7 @@ export async function netScore(url: string): Promise<any> {
     [openIssues, closedIssues] = await fetchIssues(url);
   } catch (err) {
     await info("Error fetching GitHub data");
-    throw new Error("Error fetching GitHub data");
+    throw new Error(`Error fetching GitHub data: ${err.message}`);
   }
 
   // structure for getting count (for bus factor) below

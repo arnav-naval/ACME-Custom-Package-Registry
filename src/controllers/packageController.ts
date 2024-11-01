@@ -19,15 +19,59 @@ interface PackageData {
   JSProgram: string;
 }
 
+//Interface for the metadata of PackageData
 interface PackageMetadata {
   Name: string;
   Version: string;
   ID: string;
 }
 
+//Interface for the response body of PackageData
 interface PackageResponse {
   metadata: PackageMetadata;
   data: PackageData;
+}
+
+//Getting package zip file from npm or github url
+export const getGithubUrlFromUrl = async (url: string): Promise<string> => {
+  //Asssume we are given a valid npm or github url, return the github url
+  let githubUrl = url;
+  if (url.includes("npmjs.com")) {
+    try {
+      // Extract the package name from the URL
+      const packagePath = url.split("npmjs.com/package/")[1];
+      if (!packagePath) {
+        throw new Error("Invalid npm URL");
+      }
+
+      const apiUrl = `https://registry.npmjs.org/${packagePath}`;
+      const response = await fetch(apiUrl);
+
+      if (!response.ok) {
+        throw new Error(`npm API error: ${response.statusText}`);
+      }
+      const repoURL = await response.json();
+
+      const repo: string = repoURL ? repoURL.repository.url : null;
+
+      if (!repo) {
+        console.info("No repository URL found in npm data");
+        throw new Error("No repository URL found in npm data");
+      }
+
+      // Update to Github URL
+      githubUrl = repo
+        .replace("git+", "")
+        .replace("git:", "https:")
+        .replace(".git", "");
+    } catch (err) {
+      console.info("Error fetching npm data");
+      throw new Error(`Error fetching npm data: ${err.message}`);
+    }
+  }
+
+  //Return the github url
+  return githubUrl;
 }
 
 //Function to upload a base64 encoded zip file to S3
