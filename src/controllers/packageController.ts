@@ -72,7 +72,39 @@ export const getGithubUrlFromUrl = async (url: string): Promise<string> => {
 
   //Return the github url
   return githubUrl;
-}
+};
+
+//Function to get the zip file from the github url
+export const getZipFromGithubUrl = async (githubUrl: string): Promise<AdmZip> => {
+  try {
+    // Get repo info to find the default branch name
+    const apiUrl = githubUrl
+      .replace('github.com', 'api.github.com/repos')
+      .replace(/\/$/, '');
+    
+    const repoResponse = await fetch(apiUrl);
+    if (!repoResponse.ok) {
+      throw new Error('Failed to fetch repository info');
+    }
+    
+    const repoData = await repoResponse.json();
+    const defaultBranch = repoData.default_branch;
+    
+    // Download zip and convert directly to buffer
+    const zipUrl = `${githubUrl}/archive/refs/heads/${defaultBranch}.zip`;
+    const zipResponse = await fetch(zipUrl);
+    if (!zipResponse.ok) {
+      throw new Error('Failed to download zip file');
+    }
+    //Convert the zip response to a buffer
+    const buffer = Buffer.from(await zipResponse.arrayBuffer());
+    //Create an AdmZip object from the buffer
+    return new AdmZip(buffer);
+  } catch (error) {
+    throw new Error(`Failed to download GitHub repository: ${error.message}`);
+  }
+};
+
 
 //Function to upload a base64 encoded zip file to S3
 export const uploadBase64ZipToS3 = async (base64String: string): Promise<void> => {
@@ -148,7 +180,7 @@ export const fetchPackageJson = (zip: AdmZip): { name: string, version: string }
     name: packageJson.name,
     version: version,
   };
-}
+};
 
 //Function to process the request body of URL, Content, and JSProgram
 const validateRequestBody = (body: PackageData): { isValid: boolean, error?: string } => {
@@ -187,10 +219,40 @@ const validateRequestBody = (body: PackageData): { isValid: boolean, error?: str
   //If all checks pass, return true
   return {
     isValid: true,
-  };
-  
-}
+  }; 
+};
 
+//Function to upload the zip file to S3 from a github url
+export const uploadURLZipToS3 = async (githubUrl: string): Promise<void> => {
+  try {
+    //Get the github url from the URL provided
+    const url = await getGithubUrlFromUrl(githubUrl);
+    
+    //Get the zip file from the github url
+    const zip = await getZipFromGithubUrl(url);
+    
+    //Fetch the name and version from the package.json
+    const { name, version } = fetchPackageJson(zip);
+    
+    //Generate the S3 key
+    const s3Key = generateS3Key(name, version);
+
+    //Set up s3 upload parameters
+    const putObjectParams = {
+      Bucket: process.env.BUCKET_NAME,
+      Key: `${s3Key}.zip`,
+      Body: zip.toBuffer(),
+    };
+
+    //Upload the buffer to S3
+    const command = new PutObjectCommand(putObjectParams);
+    await s3.send(command);
+    console.info(`Successfully uploaded package ${name}@${version} to S3`);
+  } catch (error) {
+    console.error(`Error uploading URL package to S3: ${error.message}`);
+    throw new Error(`Failed to upload package from URL: ${error.message}`);
+  };
+};
 
 // function to upload a package to S3
 export const uploadPackageToS3 = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
@@ -243,6 +305,11 @@ export const uploadPackageToS3 = async (event: APIGatewayProxyEvent): Promise<AP
       await uploadBase64ZipToS3(requestBody.Content);
     }
 
+    //Else URL must be provided
+    else {
+      await uploadURLZipToS3(requestBody.URL);
+    }
+
     //Return the successful response
     return {
       statusCode: 201,
@@ -276,12 +343,12 @@ export const handleBase64Upload = async (event: APIGatewayProxyEvent): Promise<A
       };
     }
 
-    const { base64Content, key } = JSON.parse(event.body);
+    const { base64Content, jsprogram } = JSON.parse(event.body);
     
-    if (!base64Content || !key) {
+    if (!base64Content || !jsprogram) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: 'Missing required fields: base64Content or key' })
+        body: JSON.stringify({ error: 'Missing required fields: base64Content or jsprogram' })
       };
     }
 
