@@ -265,8 +265,30 @@ export const uploadPackageToS3 = async (event: APIGatewayProxyEvent): Promise<AP
       };
     }
 
-    //Parse the request body
-    const requestBody = JSON.parse(event.body) as PackageData;
+    // Debug logging
+    console.log('Received event body:', event.body);
+    console.log('Event body type:', typeof event.body);
+
+    let requestBody: PackageData;
+    try {
+      // If body is a string, parse it; otherwise use it directly
+      requestBody = typeof event.body === 'string' 
+        ? JSON.parse(event.body) 
+        : event.body as PackageData;
+      
+      // Debug logging
+      console.log('Parsed request body:', requestBody);
+    } catch (parseError) {
+      console.error('JSON parsing error:', parseError);
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ 
+          error: 'Invalid JSON in request body',
+          details: parseError instanceof Error ? parseError.message : 'Unknown parsing error'
+        }),
+      };
+    }
+
     const validationResult = validateRequestBody(requestBody);
 
     //Check if validation fails
@@ -319,11 +341,18 @@ export const uploadPackageToS3 = async (event: APIGatewayProxyEvent): Promise<AP
       })
     };
   } catch (err) {
-    //Internal server error
-    console.error(`Error processing package upload: ${err.message}`);
+    console.error('Error processing package upload:', {
+      error: err,
+      errorMessage: err instanceof Error ? err.message : 'Unknown error',
+      errorStack: err instanceof Error ? err.stack : undefined
+    });
+    
     return {
-      statusCode: 500, //change to 400 as per spec
-      body: JSON.stringify({ error: 'Error processing package upload' }),
+      statusCode: 500,
+      body: JSON.stringify({ 
+        error: err instanceof Error ? err.message : 'Error processing package upload',
+        details: process.env.NODE_ENV === 'development' ? err : undefined
+      }),
     };
   }
 };
