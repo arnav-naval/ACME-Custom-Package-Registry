@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "module": "ESNext",
+    "module": "commonjs",
     "esModuleInterop": true,
     "target": "es6",
     "moduleResolution": "node",
@@ -8,7 +8,6 @@
     "outDir": "dist",
     "allowJs": true
   },
-  "include": ["src/**/*.ts", "src/tests/**/*.ts"],
+  "include": ["src/**/*.ts", "src/tests/**/*.ts", "spec/testFiles/searchPackages.test.ts"],
   "lib": ["es2015"]
 }
-
