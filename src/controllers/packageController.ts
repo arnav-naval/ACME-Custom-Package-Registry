@@ -290,7 +290,8 @@ export const uploadPackageToS3 = async (event: APIGatewayProxyEvent): Promise<AP
     }
 
     const validationResult = validateRequestBody(requestBody);
-
+    console.log('Validation result:', validationResult);
+    
     //Check if validation fails
     if (!validationResult.isValid) {
       return {
@@ -329,6 +330,7 @@ export const uploadPackageToS3 = async (event: APIGatewayProxyEvent): Promise<AP
 
     //Else URL must be provided
     else {
+      console.log('Uploading URL package to S3');
       await uploadURLZipToS3(requestBody.URL);
     }
 
