@@ -22,8 +22,6 @@ interface File {
   };
 }
 
-
-
 // Function to calculate score and latency for each metric
 const measureLatency = async (fn: () => Promise<any>, label: string) => {
   const start = Date.now();

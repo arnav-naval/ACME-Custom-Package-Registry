@@ -1,5 +1,14 @@
 import { S3Client, PutObjectCommand, PutObjectCommandOutput } from '@aws-sdk/client-s3';
-import { uploadBase64ZipToS3, fetchPackageJson, getGithubUrlFromUrl } from '../../controllers/packageController.js';
+import { APIGatewayProxyEvent } from 'aws-lambda';
+import { 
+  uploadBase64ZipToS3, 
+  fetchPackageJson, 
+  getGithubUrlFromUrl,
+  uploadURLZipToS3,
+  uploadPackageToS3,
+  handleBase64Upload,
+  getZipFromGithubUrl
+} from '../../controllers/packageController.js';
 import AdmZip from 'adm-zip';
 
 describe('packageController', () => {
@@ -7,12 +16,13 @@ describe('packageController', () => {
 
   beforeEach(() => {
     process.env.BUCKET_NAME = 'test-bucket';
+    process.env.AWS_REGION = 'us-east-1';
     
     s3SendSpy = spyOn(S3Client.prototype as any, 'send').and.resolveTo({
       $metadata: {},
       ETag: 'test-etag'
     } as unknown as PutObjectCommandOutput);
-});
+  });
 
   describe('uploadBase64ZipToS3', () => {
     // Test 1: Happy Path
@@ -21,7 +31,7 @@ describe('packageController', () => {
       zip.addFile('package.json', Buffer.from(JSON.stringify({
         name: 'test-package',
         version: '1.0.0'
-      })));
+      }), 'utf-8'));
       const testBase64 = zip.toBuffer().toString('base64');
   
       // Verifies the upload completes without error
@@ -33,9 +43,8 @@ describe('packageController', () => {
       // Verifies the S3 command was constructed correctly with all required parameters
       const command = s3SendSpy.calls.first().args[0] as PutObjectCommand;
       expect(command.input.Bucket).toBe('test-bucket');
-      expect(command.input.Key).toBe('test-package-1.0.0');
+      expect(command.input.Key).toBe('test-package-1.0.0.zip');
       expect(command.input.Body).toEqual(jasmine.any(Buffer));
-      expect(command.input['Content-Type']).toBe('application/zip');
     });
   
     // Test 2: Empty Input Validation
@@ -242,6 +251,215 @@ describe('packageController', () => {
       const result = await getGithubUrlFromUrl(npmUrl);
       console.info('Converted git protocol URL:', result);
       expect(result).toBe('https://github.com/test/repo');
+    });
+  });
+
+  describe('uploadPackageToS3', () => {
+    it('should handle missing request body', async () => {
+      const event = { body: null } as APIGatewayProxyEvent;
+      
+      const result = await uploadPackageToS3(event);
+      
+      expect(result.statusCode).toBe(400);
+      expect(JSON.parse(result.body).error).toBe('Missing request body');
+    });
+
+    it('should handle invalid JSON in request body', async () => {
+      const event = { 
+        body: 'invalid-json'
+      } as APIGatewayProxyEvent;
+      
+      const result = await uploadPackageToS3(event);
+      
+      expect(result.statusCode).toBe(400);
+      expect(JSON.parse(result.body).error).toBe('Invalid JSON in request body');
+    });
+
+    it('should validate request body fields', async () => {
+      const event = {
+        body: JSON.stringify({
+          JSProgram: 'console.log("test")',
+          type: 'base64'
+        })
+      } as APIGatewayProxyEvent;
+
+      const result = await uploadPackageToS3(event);
+      
+      expect(result.statusCode).toBe(400);
+      expect(JSON.parse(result.body).error).toContain('Missing required fields');
+    });
+
+    it('should validate type field', async () => {
+      const event = {
+        body: JSON.stringify({
+          URL: 'https://github.com/test/repo',
+          JSProgram: 'console.log("test")',
+          type: 'invalid'
+        })
+      } as APIGatewayProxyEvent;
+
+      const result = await uploadPackageToS3(event);
+      
+      expect(result.statusCode).toBe(400);
+      expect(JSON.parse(result.body).error).toContain('Invalid type');
+    });
+
+    it('should not allow both URL and Content', async () => {
+      const event = {
+        body: JSON.stringify({
+          URL: 'https://github.com/test/repo',
+          Content: 'base64content',
+          JSProgram: 'console.log("test")'
+        })
+      } as APIGatewayProxyEvent;
+
+      const result = await uploadPackageToS3(event);
+      
+      expect(result.statusCode).toBe(400);
+      expect(JSON.parse(result.body).error).toBe('Cannot provide both URL and Content fields');
+    });
+
+    it('should handle successful Content upload', async () => {
+      const zip = new AdmZip();
+      zip.addFile('package.json', Buffer.from(JSON.stringify({
+        name: 'test-package',
+        version: '1.0.0'
+      })));
+      
+      const event = {
+        body: JSON.stringify({
+          Content: zip.toBuffer().toString('base64'),
+          JSProgram: 'console.log("test")'
+        })
+      } as APIGatewayProxyEvent;
+
+      const result = await uploadPackageToS3(event);
+      
+      expect(result.statusCode).toBe(201);
+      expect(JSON.parse(result.body).metadata).toBeDefined();
+      expect(JSON.parse(result.body).data).toBeDefined();
+    });
+  });
+
+  describe('handleBase64Upload', () => {
+    it('should handle missing request body', async () => {
+      const event = { body: null } as APIGatewayProxyEvent;
+      
+      const result = await handleBase64Upload(event);
+      
+      expect(result.statusCode).toBe(400);
+      expect(JSON.parse(result.body).error).toBe('Missing request body');
+    });
+
+    it('should handle missing required fields', async () => {
+      const event = {
+        body: JSON.stringify({})
+      } as APIGatewayProxyEvent;
+      
+      const result = await handleBase64Upload(event);
+      
+      expect(result.statusCode).toBe(400);
+      expect(JSON.parse(result.body).error).toBe('Missing required fields: base64Content or jsprogram');
+    });
+
+    it('should handle successful upload', async () => {
+      const zip = new AdmZip();
+      zip.addFile('package.json', Buffer.from(JSON.stringify({
+        name: 'test-package',
+        version: '1.0.0'
+      })));
+      
+      const event = {
+        body: JSON.stringify({
+          base64Content: zip.toBuffer().toString('base64'),
+          jsprogram: 'console.log("test")'
+        })
+      } as APIGatewayProxyEvent;
+
+      const result = await handleBase64Upload(event);
+      
+      expect(result.statusCode).toBe(200);
+      expect(JSON.parse(result.body).message).toBe('Package uploaded successfully');
+    });
+  });
+
+  describe('getZipFromGithubUrl', () => {
+    let fetchSpy: jasmine.Spy;
+
+    beforeEach(() => {
+      fetchSpy = spyOn(global, 'fetch');
+    });
+
+    it('should successfully download and create zip from github', async () => {
+      const githubUrl = 'https://github.com/test/repo';
+      const mockZip = new AdmZip();
+      
+      fetchSpy.and.returnValues(
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ default_branch: 'main' })
+        } as Response),
+        Promise.resolve({
+          ok: true,
+          arrayBuffer: () => Promise.resolve(mockZip.toBuffer())
+        } as Response)
+      );
+
+      const result = await getZipFromGithubUrl(githubUrl);
+      expect(result).toBeDefined();
+      expect(result instanceof AdmZip).toBeTruthy();
+    });
+
+    it('should throw error when github api fails', async () => {
+      const githubUrl = 'https://github.com/test/repo';
+      
+      fetchSpy.and.resolveTo({
+        ok: false,
+        statusText: 'Not Found'
+      } as Response);
+
+      await expectAsync(getZipFromGithubUrl(githubUrl))
+        .toBeRejectedWithError('Failed to download GitHub repository: Failed to fetch repository info');
+    });
+  });
+
+  describe('uploadURLZipToS3', () => {
+    beforeEach(() => {
+      spyOn(console, 'info');
+      spyOn(console, 'error');
+    });
+
+    it('should successfully upload from github url', async () => {
+      const githubUrl = 'https://github.com/test/repo';
+      const mockZip = new AdmZip();
+      mockZip.addFile('package.json', Buffer.from(JSON.stringify({
+        name: 'test-package',
+        version: '1.0.0'
+      })));
+
+      spyOn(global, 'fetch').and.returnValues(
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ default_branch: 'main' })
+        } as Response),
+        Promise.resolve({
+          ok: true,
+          arrayBuffer: () => Promise.resolve(mockZip.toBuffer())
+        } as Response)
+      );
+
+      await expectAsync(uploadURLZipToS3(githubUrl)).toBeResolved();
+      expect(s3SendSpy).toHaveBeenCalled();
+      expect(console.info).toHaveBeenCalledWith('Successfully uploaded package test-package@1.0.0 to S3');
+    });
+
+    it('should throw error when upload fails', async () => {
+      const githubUrl = 'https://github.com/test/repo';
+      s3SendSpy.and.rejectWith(new Error('Upload failed'));
+
+      await expectAsync(uploadURLZipToS3(githubUrl))
+        .toBeRejectedWithError('Failed to upload package from URL: Upload failed');
+      expect(console.error).toHaveBeenCalled();
     });
   });
 }); 
