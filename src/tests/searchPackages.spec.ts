@@ -1,4 +1,4 @@
-import { searchPackages } from '../controllers/packageController';
+import { searchPackages } from '../controllers/searchController';
 import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
 
 describe('searchPackages', () => {
