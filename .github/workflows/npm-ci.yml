@@ -3,7 +3,7 @@ name: CI/CD for lambda function
 on:
   push:
     branches:
-      - 'features/package-rating'
+      - 'feature/package-rating'
       - 'features/upload-package'
       - main 
   pull_request:
