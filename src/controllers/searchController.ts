@@ -47,7 +47,7 @@ export const searchPackages = async (event: APIGatewayProxyEvent): Promise<APIGa
     const matchedPackages = (result.Items || []).filter(pkg =>
       regexPattern.test(pkg.PackageName) || (pkg.README && regexPattern.test(pkg.README))
     );
-
+    // clarity
     if (matchedPackages.length === 0) {
       return {
         statusCode: 404,
