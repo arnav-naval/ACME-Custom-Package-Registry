@@ -30,6 +30,9 @@ jobs:
     - name: Rename handler file
       run: mv dist/handlers/lambdaHandler.js dist/handlers/lambdaHandler.mjs
 
+    - name: Prepare for deployment
+      run: npm prune --production
+
     - name: Create deployment package
       run: |
         cd dist
