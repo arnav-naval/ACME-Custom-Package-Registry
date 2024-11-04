@@ -15,10 +15,10 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Set up Node.js
-      uses: actions/setup-node@v3
+      uses: actions/setup-node@v4
       with:
         node-version: '20'  # specify the Node.js version you need
 
@@ -27,6 +27,12 @@ jobs:
 
     - name: Build
       run: npm run build
+
+    - name: Rename handler file
+      run: mv dist/handlers/searchPackagesHandler.js dist/handlers/searchPackagesHandler.mjs
+
+    - name: Prepare for deployment
+      run: npm prune --production
 
     - name: Create deployment package
       run: |
