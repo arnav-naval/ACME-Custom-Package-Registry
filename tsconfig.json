@@ -8,7 +8,7 @@
     "outDir": "dist",
     "allowJs": true
   },
-  "include": ["src/**/*.ts", "src/tests/**/*.ts"],
+  "include": ["src/**/*.ts", "src/tests/**/*.ts", "src/tests/controllers/packageController.spec.ts"],
   "lib": ["es2015"]
 }
 
