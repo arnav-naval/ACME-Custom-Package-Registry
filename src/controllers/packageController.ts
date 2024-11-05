@@ -413,8 +413,8 @@ const checkPackageRating = async (requestBody: PackageData): Promise<any> => {
       //check the rating of the package from the url
     const url = await getGithubUrlFromUrl(requestBody.URL);
     const score = await netScore(url);
-    const validateScore = validateScore(score);
-    if (!validateScore) {
+    const validScore = validateScore(score);
+    if (!validScore) {
       return {
         statusCode: 424,
         body: JSON.stringify({ error: 'Package is not uploaded due to the disqualified rating' })
