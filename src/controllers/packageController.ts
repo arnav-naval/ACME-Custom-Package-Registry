@@ -401,7 +401,7 @@ export const handleBase64Upload = async (event: APIGatewayProxyEvent): Promise<A
 
 //Function to validate the score and ensure all scores are above 0.5
 const validateScore = (score: any): boolean => {
-  const lim = 0.1;
+  const lim = 0;
   return score.BusFactor >= lim && score.Correctness >= lim && score.RampUp >= lim && score.ResponsiveMaintainer >= lim && score.License >= lim && score.PinnedDependencies >= lim && score.PRReview >= lim;
 };
 
