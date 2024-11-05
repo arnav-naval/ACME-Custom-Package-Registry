@@ -1,11 +1,8 @@
 //package controller to define functionality for routes for uploading and downloading packages
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import dotenv from 'dotenv';
+import { netScore } from '../metric_score.js';
 import AdmZip from 'adm-zip';
-
-// Load environment variables from .env file
-dotenv.config();
 
 //initialize S3 client
 const s3 = new S3Client({
@@ -300,19 +297,23 @@ export const uploadPackageToS3 = async (event: APIGatewayProxyEvent): Promise<AP
       };
     }
 
+    //Check the package rating
+    const packageRatingScore = await checkPackageRating(requestBody);
+    console.log('Package rating score:', packageRatingScore);
+    
+    // Add error handling
+    if ('statusCode' in packageRatingScore && packageRatingScore.statusCode === 424) {
+      return {
+        statusCode: packageRatingScore.statusCode,
+        body: packageRatingScore.body
+      };
+    }
+
     // TODO: Check if package exists
     // if (packageExists) {
     //   return {
     //     statusCode: 409,
     //     body: JSON.stringify({ error: 'Package exists already' })
-    //   };
-    // }
-
-    // TODO: Check package rating
-    // if (packageRatingDisqualified) {
-    //   return {
-    //     statusCode: 424,
-    //     body: JSON.stringify({ error: 'Package is not uploaded due to the disqualified rating' })
     //   };
     // }
 
@@ -396,4 +397,37 @@ export const handleBase64Upload = async (event: APIGatewayProxyEvent): Promise<A
       body: JSON.stringify({ error: 'Internal server error' })
     };
   }
+};
+
+//Function to check the package rating and return the rating as a json object
+const checkPackageRating = async (requestBody: PackageData): Promise<any> => {
+  //if requestBody.URL is provided, check the rating of the package from the url else check from requestBody.Content
+  try {
+    if (requestBody.URL) {
+      //check the rating of the package from the url
+    const url = await getGithubUrlFromUrl(requestBody.URL);
+    const score = await netScore(url);
+    const validateScore = validateScore(score);
+    if (!validateScore) {
+      return {
+        statusCode: 424,
+        body: JSON.stringify({ error: 'Package is not uploaded due to the disqualified rating' })
+      };
+    }
+    return score;
+    } else {
+      //check the rating of the package from the requestBody.Content
+    }
+  } catch (error) {
+    console.error('Error checking package rating:', error);
+    return {
+      statusCode: 424,
+      body: JSON.stringify({ error: 'Error checking package rating, package could not be uploaded' })
+    };
+  }
+};
+
+//Function to validate the score and ensure all scores are above 0.5
+const validateScore = (score: any): boolean => {
+  return score.BusFactor >= 0.5 && score.Correctness >= 0.5 && score.RampUp >= 0.5 && score.ResponsiveMaintainer >= 0.5 && score.License >= 0.5 && score.PinnedDependencies >= 0.5 && score.PRReview >= 0.5;
 };
