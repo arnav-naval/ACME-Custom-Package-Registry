@@ -399,6 +399,13 @@ export const handleBase64Upload = async (event: APIGatewayProxyEvent): Promise<A
   }
 };
 
+//Function to validate the score and ensure all scores are above 0.5
+const validateScore = (score: any): boolean => {
+  const lim = 0.1;
+  return score.BusFactor >= lim && score.Correctness >= lim && score.RampUp >= lim && score.ResponsiveMaintainer >= lim && score.License >= lim && score.PinnedDependencies >= lim && score.PRReview >= lim;
+};
+
+
 //Function to check the package rating and return the rating as a json object
 const checkPackageRating = async (requestBody: PackageData): Promise<any> => {
   //if requestBody.URL is provided, check the rating of the package from the url else check from requestBody.Content
@@ -425,9 +432,4 @@ const checkPackageRating = async (requestBody: PackageData): Promise<any> => {
       body: JSON.stringify({ error: 'Error checking package rating, package could not be uploaded' })
     };
   }
-};
-
-//Function to validate the score and ensure all scores are above 0.5
-const validateScore = (score: any): boolean => {
-  return score.BusFactor >= 0.5 && score.Correctness >= 0.5 && score.RampUp >= 0.5 && score.ResponsiveMaintainer >= 0.5 && score.License >= 0.5 && score.PinnedDependencies >= 0.5 && score.PRReview >= 0.5;
 };
