@@ -405,7 +405,6 @@ const validateScore = (score: any): boolean => {
   return score.BusFactor >= lim && score.Correctness >= lim && score.RampUp >= lim && score.ResponsiveMaintainer >= lim && score.License >= lim && score.PinnedDependencies >= lim && score.PRReview >= lim;
 };
 
-
 //Function to check the package rating and return the rating as a json object
 const checkPackageRating = async (requestBody: PackageData): Promise<any> => {
   //if requestBody.URL is provided, check the rating of the package from the url else check from requestBody.Content
