@@ -48,7 +48,7 @@ describe('resetRegistry', () => {
     });
     expect(sendMock).toHaveBeenCalledTimes(1);
     expect(sendMock).toHaveBeenCalledWith(
-      jasmine.any(DeleteCommand) // Ensure DeleteCommand is called
+      jasmine.any(DeleteCommand)
     );
   });
 
