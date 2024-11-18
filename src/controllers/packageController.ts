@@ -1,13 +1,21 @@
 //package controller to define functionality for routes for uploading and downloading packages
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
+import { DynamoDBClient, PutItemCommand } from '@aws-sdk/client-dynamodb';
+import { marshall } from '@aws-sdk/util-dynamodb';
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { netScore } from '../metric_score.js';
 import AdmZip from 'adm-zip';
+import { createHash } from 'crypto';
 
 //initialize S3 client
 const s3 = new S3Client({
-    region: process.env.AWS_REGION,
+  region: process.env.AWS_REGION,
 });
+
+//initialize dynamoDB client
+const dynamoDb = new DynamoDBClient({
+  region: process.env.AWS_REGION,
+})
 
 //Interface for the request body of PackageData
 interface PackageData {
@@ -28,6 +36,11 @@ interface PackageResponse {
   metadata: PackageMetadata;
   data: PackageData;
 }
+
+//Function to generate a unique package id
+const generatePacakgeId = (name: string, version: string): string => {
+  return createHash('sha256').update(`${name}-${version}`).digest('hex');
+};
 
 //Getting package zip file from npm or github url
 export const getGithubUrlFromUrl = async (url: string): Promise<string> => {
@@ -116,13 +129,17 @@ export const uploadBase64ZipToS3 = async (base64String: string): Promise<void> =
     const { name, version } = fetchPackageJson(zip);
 
     //Generate the S3 key
-    const s3Key = generateS3Key(name, version);
-
+    //const s3Key = generateS3Key(name, version);
+    const packageId = generatePacakgeId(name, version);
     //Set up s3 upload parameters
     const putObjectParams = {
       Bucket: process.env.BUCKET_NAME,
-      Key: `${s3Key}.zip`, //only adding zip to key changes file type in S3 bucket
+      Key: `${packageId}.zip`, //only adding zip to key changes file type in S3 bucket
       Body: buffer,
+      Metadata: {
+        Name: name,
+        Version: version,
+      }
     };
 
     //Upload the buffer to S3
@@ -232,13 +249,17 @@ export const uploadURLZipToS3 = async (githubUrl: string): Promise<void> => {
     const { name, version } = fetchPackageJson(zip);
     
     //Generate the S3 key
-    const s3Key = generateS3Key(name, version);
+    const packageId = generatePacakgeId(name, version);
 
     //Set up s3 upload parameters
     const putObjectParams = {
       Bucket: process.env.BUCKET_NAME,
-      Key: `${s3Key}.zip`,
+      Key: `${packageId}.zip`,
       Body: zip.toBuffer(),
+      Metadata: {
+        Name: name,
+        Version: version,
+      }
     };
 
     //Upload the buffer to S3
@@ -251,6 +272,8 @@ export const uploadURLZipToS3 = async (githubUrl: string): Promise<void> => {
   };
 };
 
+//const packageExists = async ()
+
 // function to upload a package to S3
 export const uploadPackageToS3 = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
@@ -261,10 +284,6 @@ export const uploadPackageToS3 = async (event: APIGatewayProxyEvent): Promise<AP
         body: JSON.stringify({ error: 'Missing request body' }),
       };
     }
-
-    // Debug logging
-    console.log('Received event body:', event.body);
-    console.log('Event body type:', typeof event.body);
 
     let requestBody: PackageData;
     try {
@@ -281,7 +300,6 @@ export const uploadPackageToS3 = async (event: APIGatewayProxyEvent): Promise<AP
         statusCode: 400,
         body: JSON.stringify({ 
           error: 'Invalid JSON in request body',
-          details: parseError instanceof Error ? parseError.message : 'Unknown parsing error'
         }),
       };
     }
@@ -411,18 +429,19 @@ const checkPackageRating = async (requestBody: PackageData): Promise<any> => {
   try {
     if (requestBody.URL) {
       //check the rating of the package from the url
-    const url = await getGithubUrlFromUrl(requestBody.URL);
-    const score = await netScore(url);
-    const validScore = validateScore(score);
-    if (!validScore) {
-      return {
-        statusCode: 424,
-        body: JSON.stringify({ error: 'Package is not uploaded due to the disqualified rating' })
-      };
-    }
-    return score;
+      const url = await getGithubUrlFromUrl(requestBody.URL);
+      const score = await netScore(url);
+      const validScore = validateScore(score);
+      if (!validScore) {
+        return {
+          statusCode: 424,
+          body: JSON.stringify({ error: 'Package is not uploaded due to the disqualified rating' })
+        };
+      }
+      return score;
     } else {
       //check the rating of the package from the requestBody.Content
+      
     }
   } catch (error) {
     console.error('Error checking package rating:', error);
@@ -432,3 +451,39 @@ const checkPackageRating = async (requestBody: PackageData): Promise<any> => {
     };
   }
 };
+
+//Function to upload package scores and S3 data to dynamoDB database
+const uploadPackageMetadataToDynamoDB = async (scores: any, packageId: string): Promise<void> => {
+  try {
+    //Create the item to be uploaded to dynamoDB
+    const item = {
+      packageId: packageId,
+      timestamp: new Date().toISOString(),
+      scores: {
+        netScore: scores.netScore,
+        BusFactor: scores.BusFactor,
+        Correctness: scores.Correctness,
+        RampUp: scores.RampUp,
+        ResponsiveMaintainer: scores.ResponsiveMaintainer,
+        License: scores.License,
+        PinnedDependencies: scores.PinnedDependencies,
+        PRReview: scores.PRReview,
+      }
+    };
+
+    //Create params for DynamDB PutItemCommand
+    const params = {
+      TableName: process.env.SCORES_TABLE_NAME,
+      Item: marshall(item),
+    };
+
+    //Upload the item to dynamoDB
+    const command = new PutItemCommand(params);
+    await dynamoDb.send(command);
+    console.info(`Successfully uploaded package ${packageId} scores to dynamoDB`);
+  } catch (error) {
+    console.error('Error uploading package scores to dynamoDB:', error);
+    throw new Error('Error uploading package scores to dynamoDB');
+  }
+};
+
