@@ -1,5 +1,5 @@
-const { fetchPackageVersions } = require('../controllers/fetchPackageVersionsController');
-const { DynamoDBDocumentClient, QueryCommand } = require('@aws-sdk/lib-dynamodb');
+import { fetchPackageVersions } from '../controllers/fetchPackageVersionsController';
+import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
 
 describe('fetchPackageVersions', () => {
   const mockDynamoDBClient = {
@@ -9,7 +9,7 @@ describe('fetchPackageVersions', () => {
   beforeEach(() => {
     // Reset the mock behavior before each test
     mockDynamoDBClient.send.calls.reset();
-    spyOn(DynamoDBDocumentClient, 'from').and.returnValue(mockDynamoDBClient);
+    spyOn(DynamoDBDocumentClient, 'from').and.returnValue(mockDynamoDBClient as any);
   });
 
   it('should return all versions for a package', async () => {
@@ -24,7 +24,9 @@ describe('fetchPackageVersions', () => {
       body: JSON.stringify(['1.0.0', '1.2.3']),
     });
     expect(mockDynamoDBClient.send).toHaveBeenCalledTimes(1);
-    expect(mockDynamoDBClient.send).toHaveBeenCalledWith(jasmine.any(QueryCommand));
+    expect(mockDynamoDBClient.send).toHaveBeenCalledWith(
+      jasmine.any(QueryCommand)
+    );
   });
 
   it('should return versions within a bounded range', async () => {
