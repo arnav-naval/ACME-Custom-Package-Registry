@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - 'features/upload-package'
+      - 'features/reset'
       - main
   pull_request:
     branches: [ main ]
