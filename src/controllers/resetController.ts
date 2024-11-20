@@ -17,6 +17,7 @@ export const resetRegistry = async (authToken: string): Promise<{ statusCode: nu
       };
     }
 
+    
     if (authToken !== "admin") {
       return {
         statusCode: 401,
