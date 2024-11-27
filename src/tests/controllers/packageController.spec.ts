@@ -15,7 +15,7 @@ describe('packageController', () => {
 
   beforeEach(() => {
     process.env.BUCKET_NAME = 'test-bucket';
-    process.env.AWS_REGION = 'us-east-1';
+    process.env.AWS_REGION = 'us-east-2';
     
     s3SendSpy = spyOn(S3Client.prototype as any, 'send').and.resolveTo({
       $metadata: {},

@@ -38,7 +38,7 @@ interface PackageResponse {
 }
 
 //Function to generate a unique package id
-const generatePacakgeId = (name: string, version: string): string => {
+const generatePackageId = (name: string, version: string): string => {
   return createHash('sha256').update(`${name}-${version}`).digest('hex');
 };
 
@@ -130,7 +130,7 @@ export const uploadBase64ZipToS3 = async (base64String: string): Promise<void> =
 
     //Generate the S3 key
     //const s3Key = generateS3Key(name, version);
-    const packageId = generatePacakgeId(name, version);
+    const packageId = generatePackageId(name, version);
     //Set up s3 upload parameters
     const putObjectParams = {
       Bucket: process.env.BUCKET_NAME,
@@ -249,13 +249,13 @@ export const uploadURLZipToS3 = async (githubUrl: string): Promise<void> => {
     const { name, version } = fetchPackageJson(zip);
     
     //Generate the S3 key
-    const packageId = generatePacakgeId(name, version);
+    const packageId = generatePackageId(name, version);
 
     //Set up s3 upload parameters
     const putObjectParams = {
       Bucket: process.env.BUCKET_NAME,
       Key: `${packageId}.zip`,
-      Body: zip.toBuffer(),
+      Body: zip, //removed .toBuffer() since zip is already a buffer
       Metadata: {
         Name: name,
         Version: version,
@@ -272,7 +272,22 @@ export const uploadURLZipToS3 = async (githubUrl: string): Promise<void> => {
   };
 };
 
-//const packageExists = async ()
+const packageExists = async (packageId: string): Promise<boolean> => {
+  try {
+    //Check if package already exists in S3 bucket
+    const command = new HeadObjectCommand({
+      Bucket: process.env.BUCKET_NAME,
+      Key: `${packageId}.zip`,
+    });
+    await s3.send(command);
+    return true; //Object exists
+  } catch (error) {
+    if (error.name === 'NotFound') {
+      return false; //Object does not exist
+    }
+    throw error;
+  }
+};
 
 // function to upload a package to S3
 export const uploadPackageToS3 = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
@@ -314,6 +329,30 @@ export const uploadPackageToS3 = async (event: APIGatewayProxyEvent): Promise<AP
         body: JSON.stringify({ error: validationResult.error }),
       };
     }
+    
+    //Fetch name and version from package json (repeated work)
+    let zip: AdmZip;
+    let name: string;
+    let version: string;
+    if (requestBody.Content) {
+      const tempBuffer = Buffer.from(requestBody.Content, 'base64');
+      zip = new AdmZip(tempBuffer);
+      ({ name, version } = fetchPackageJson(zip));
+    }
+    else {
+      const url = await getGithubUrlFromUrl(requestBody.URL);
+      zip = await getZipFromGithubUrl(url);
+      ({ name, version } = fetchPackageJson(zip));
+    }
+    const packageId = generatePackageId(name, version);
+
+    //Check if package already exists in S3 bucket
+    if (await packageExists(`${packageId}.zip`)) {
+      return {
+        statusCode: 409,
+        body: JSON.stringify({ error: 'Package exists already' })
+      };
+    }
 
     //Check the package rating
     const packageRatingScore = await checkPackageRating(requestBody);
@@ -327,19 +366,10 @@ export const uploadPackageToS3 = async (event: APIGatewayProxyEvent): Promise<AP
       };
     }
 
-    // TODO: Check if package exists
-    // if (packageExists) {
-    //   return {
-    //     statusCode: 409,
-    //     body: JSON.stringify({ error: 'Package exists already' })
-    //   };
-    // }
-
     //Generate metadata
     const metadata = {
-      Name: "extracted-name",
-      Version: "extracted-version",
-      ID: "generated-id"
+      Name: name,
+      Version: version,
     };
 
     //Upload the base 64 zip to S3 if Content is provided
@@ -376,11 +406,6 @@ export const uploadPackageToS3 = async (event: APIGatewayProxyEvent): Promise<AP
       }),
     };
   }
-};
-
-//Function to generate S3 key
-const generateS3Key = (name: string, version: string): string => {
-  return `${name}-${version}`;
 };
 
 //Function to handle the base64 upload
@@ -441,6 +466,10 @@ const checkPackageRating = async (requestBody: PackageData): Promise<any> => {
       return score;
     } else {
       //check the rating of the package from the requestBody.Content
+      const tempBuffer = Buffer.from(requestBody.Content, 'base64');
+      const zip = new AdmZip(tempBuffer);
+      //get github url from zip file
+      //run package rating check on url and return score
       
     }
   } catch (error) {

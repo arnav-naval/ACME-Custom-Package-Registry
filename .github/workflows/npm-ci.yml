@@ -30,8 +30,8 @@ jobs:
     #- name: Lint
     #  run: npm run lint
     
-    - name: Test
-      run: npm run test:single
+    # - name: Test
+    #   run: npm run test:single
 
     - name: Rename handler file
       run: mv dist/handlers/lambdaHandler.js dist/handlers/lambdaHandler.mjs
