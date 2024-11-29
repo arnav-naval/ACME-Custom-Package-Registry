@@ -255,7 +255,7 @@ export const uploadURLZipToS3 = async (githubUrl: string): Promise<void> => {
     const putObjectParams = {
       Bucket: process.env.BUCKET_NAME,
       Key: `${packageId}.zip`,
-      Body: zip, //removed .toBuffer() since zip is already a buffer
+      Body: zip.toBuffer(), 
       Metadata: {
         Name: name,
         Version: version,
