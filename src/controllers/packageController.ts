@@ -38,7 +38,7 @@ interface PackageResponse {
 }
 
 //Function to generate a unique package id
-const generatePackageId = (name: string, version: string): string => {
+export const generatePackageId = (name: string, version: string): string => {
   return createHash('sha256').update(`${name}-${version}`).digest('hex');
 };
 
@@ -197,7 +197,7 @@ export const fetchPackageJson = (zip: AdmZip): { name: string, version: string }
 };
 
 //Function to process the request body of URL, Content, and JSProgram
-const validateRequestBody = (body: PackageData): { isValid: boolean, error?: string } => {
+export const validateRequestBody = (body: PackageData): { isValid: boolean, error?: string } => {
   //Check if all required fields are presen
   if (!body.URL && !body.Content && !body.JSProgram) {
     return {
@@ -267,12 +267,13 @@ export const uploadURLZipToS3 = async (githubUrl: string): Promise<void> => {
     await s3.send(command);
     console.info(`Successfully uploaded package ${name}@${version} to S3`);
   } catch (error) {
+    const message = error.message || 'Unknown error';
     console.error(`Error uploading URL package to S3: ${error.message}`);
     throw new Error(`Failed to upload package from URL: ${error.message}`);
   };
 };
 
-const packageExists = async (packageId: string): Promise<boolean> => {
+export const packageExists = async (packageId: string): Promise<boolean> => {
   try {
     //Check if package already exists in S3 bucket
     const command = new HeadObjectCommand({
@@ -443,13 +444,13 @@ export const handleBase64Upload = async (event: APIGatewayProxyEvent): Promise<A
 };
 
 //Function to validate the score and ensure all scores are above 0.5
-const validateScore = (score: any): boolean => {
+export const validateScore = (score: any): boolean => {
   const lim = 0;
   return score.BusFactor >= lim && score.Correctness >= lim && score.RampUp >= lim && score.ResponsiveMaintainer >= lim && score.License >= lim && score.PinnedDependencies >= lim && score.PRReview >= lim;
 };
 
 //Function to check the package rating and return the rating as a json object
-const checkPackageRating = async (requestBody: PackageData): Promise<any> => {
+export const checkPackageRating = async (requestBody: PackageData): Promise<any> => {
   //if requestBody.URL is provided, check the rating of the package from the url else check from requestBody.Content
   try {
     if (requestBody.URL) {
