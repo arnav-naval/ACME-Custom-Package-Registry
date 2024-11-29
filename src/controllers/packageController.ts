@@ -448,6 +448,38 @@ const validateScore = (score: any): boolean => {
   return score.BusFactor >= lim && score.Correctness >= lim && score.RampUp >= lim && score.ResponsiveMaintainer >= lim && score.License >= lim && score.PinnedDependencies >= lim && score.PRReview >= lim;
 };
 
+//Function to get the github url from the zip file
+const getGithubUrlFromZip = async (zip: AdmZip): Promise<string> => {
+  const zipEntries = zip.getEntries();
+  let packageJsonEntry = zipEntries.find(entry => entry.entryName === 'package.json');
+
+  if (!packageJsonEntry) {
+    throw new Error('Package.json not found in the zip file');
+  }
+ 
+  const packageJsonContent = packageJsonEntry.getData().toString('utf8');
+  const packageJson = JSON.parse(packageJsonContent);
+  //Check if repository field is present (URL)
+  if (!packageJson.repository) {
+    throw new Error('Repository field not found in package.json');
+  }
+
+  // Handle both string and object repository formats
+  const repoUrl = typeof packageJson.repository === 'string' 
+    ? packageJson.repository 
+    : packageJson.repository.url;
+
+  if (!repoUrl) {
+    throw new Error('Repository URL not found in package.json');
+  }
+
+  // Clean up the URL similar to getGithubUrlFromUrl function
+  return repoUrl
+    .replace("git+", "")
+    .replace("git:", "https:")
+    .replace(".git", "");
+};
+
 //Function to check the package rating and return the rating as a json object
 const checkPackageRating = async (requestBody: PackageData): Promise<any> => {
   //if requestBody.URL is provided, check the rating of the package from the url else check from requestBody.Content
@@ -468,9 +500,16 @@ const checkPackageRating = async (requestBody: PackageData): Promise<any> => {
       //check the rating of the package from the requestBody.Content
       const tempBuffer = Buffer.from(requestBody.Content, 'base64');
       const zip = new AdmZip(tempBuffer);
-      //get github url from zip file
-      //run package rating check on url and return score
-      
+      const url = await getGithubUrlFromZip(zip);
+      const score = await netScore(url);
+      const validScore = validateScore(score);
+      if (!validScore) {
+        return {
+          statusCode: 424,
+          body: JSON.stringify({ error: 'Package is not uploaded due to the disqualified rating' })
+        };
+      }
+      return score;
     }
   } catch (error) {
     console.error('Error checking package rating:', error);
