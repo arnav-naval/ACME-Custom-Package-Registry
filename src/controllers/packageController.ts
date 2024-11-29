@@ -350,7 +350,7 @@ export const uploadPackageToS3 = async (event: APIGatewayProxyEvent): Promise<AP
     const packageId = generatePackageId(name, version);
 
     //Check if package already exists in S3 bucket
-    if (await packageExists(`${packageId}.zip`)) {
+    if (await packageExists(packageId)) {
       return {
         statusCode: 409,
         body: JSON.stringify({ error: 'Package exists already' })
