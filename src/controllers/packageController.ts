@@ -274,15 +274,18 @@ export const uploadURLZipToS3 = async (githubUrl: string): Promise<void> => {
 
 const packageExists = async (packageId: string): Promise<boolean> => {
   try {
+    console.log('Checking if package exists in S3 bucket');
     //Check if package already exists in S3 bucket
     const command = new HeadObjectCommand({
       Bucket: process.env.BUCKET_NAME,
       Key: `${packageId}.zip`,
     });
     await s3.send(command);
+    console.log('Package exists in S3 bucket');
     return true; //Object exists
   } catch (error) {
     if (error.name === 'NotFound') {
+      console.log('Package does not exist in S3 bucket');
       return false; //Object does not exist
     }
     throw error;
@@ -525,7 +528,9 @@ const checkPackageRating = async (requestBody: PackageData): Promise<any> => {
 //Function to upload package scores and S3 data to dynamoDB database
 const uploadPackageMetadataToDynamoDB = async (scores: any, packageId: string): Promise<void> => {
   try {
-    //Create the item to be uploaded to dynamoDB
+    // Log the incoming scores object
+    console.log('Raw scores object:', JSON.stringify(scores, null, 2));
+
     const item = {
       id: packageId,
       timestamp: new Date().toISOString(),
@@ -541,13 +546,14 @@ const uploadPackageMetadataToDynamoDB = async (scores: any, packageId: string): 
       }
     };
 
-    //Create params for DynamDB PutItemCommand
+    // Log the constructed item
+    console.log('Constructed item:', JSON.stringify(item, null, 2));
+
     const params = {
       TableName: process.env.SCORES_TABLE_NAME,
-      Item: marshall(item),
+      Item: marshall(item, { removeUndefinedValues: true }),
     };
 
-    //Upload the item to dynamoDB
     const command = new PutItemCommand(params);
     await dynamoDb.send(command);
     console.info(`Successfully uploaded package ${packageId} scores to dynamoDB`);
