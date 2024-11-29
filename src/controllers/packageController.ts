@@ -382,6 +382,8 @@ export const uploadPackageToS3 = async (event: APIGatewayProxyEvent): Promise<AP
       console.log('Uploading URL package to S3');
       await uploadURLZipToS3(requestBody.URL);
     }
+    //Since we havent exited, save package scores to dynamoDb
+    await uploadPackageMetadataToDynamoDB(packageRatingScore, packageId);
 
     //Return the successful response
     return {
