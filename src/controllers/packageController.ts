@@ -525,7 +525,7 @@ const uploadPackageMetadataToDynamoDB = async (scores: any, packageId: string): 
   try {
     //Create the item to be uploaded to dynamoDB
     const item = {
-      packageId: packageId,
+      id: packageId,
       timestamp: new Date().toISOString(),
       scores: {
         netScore: scores.netScore,
