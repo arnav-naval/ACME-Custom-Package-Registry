@@ -18,7 +18,7 @@ const dynamoDb = new DynamoDBClient({
 })
 
 //Interface for the request body of PackageData
-interface PackageData {
+export interface PackageData {
   Content?: string;
   URL?: string;
   JSProgram: string;
@@ -295,6 +295,7 @@ export const uploadPackageToS3 = async (event: APIGatewayProxyEvent): Promise<AP
   try {
     //Check if request body is missing
     if (!event.body) {
+      console.error('Missing request body');
       return {
         statusCode: 400,
         body: JSON.stringify({ error: 'Missing request body' }),
@@ -335,23 +336,44 @@ export const uploadPackageToS3 = async (event: APIGatewayProxyEvent): Promise<AP
     let zip: AdmZip;
     let name: string;
     let version: string;
+
     if (requestBody.Content) {
-      const tempBuffer = Buffer.from(requestBody.Content, 'base64');
-      zip = new AdmZip(tempBuffer);
-      ({ name, version } = fetchPackageJson(zip));
+      console.log('Processing Content field...');
+      try {
+        const tempBuffer = Buffer.from(requestBody.Content, 'base64');
+        zip = new AdmZip(tempBuffer);
+        console.log('ZIP file successfully created from Content');
+        ({ name, version } = fetchPackageJson(zip));
+        console.log('Parsed package.json:', { name, version });
+      } catch (error) {
+        console.error('Error processing Content:', error);
+        throw new Error('Invalid ZIP file format or missing package.json');
+      }
+    } else {
+      console.log('Processing URL field...');
+      try {
+        const url = await getGithubUrlFromUrl(requestBody.URL);
+        console.log('Resolved URL:', url);
+        zip = await getZipFromGithubUrl(url);
+        console.log('ZIP file successfully downloaded from URL');
+        ({ name, version } = fetchPackageJson(zip));
+        console.log('Parsed package.json:', { name, version });
+      } catch (error) {
+        console.error('Error processing URL:', error);
+        throw new Error('Invalid URL or GitHub repository');
+      }
     }
-    else {
-      const url = await getGithubUrlFromUrl(requestBody.URL);
-      zip = await getZipFromGithubUrl(url);
-      ({ name, version } = fetchPackageJson(zip));
-    }
+
     const packageId = generatePackageId(name, version);
+    console.log('Generated package ID:', packageId);
 
     //Check if package already exists in S3 bucket
-    if (await packageExists(`${packageId}.zip`)) {
+    const exists = await packageExists(packageId);
+    if (exists) {
+      console.log(`Package ${packageId} already exists in S3`);
       return {
         statusCode: 409,
-        body: JSON.stringify({ error: 'Package exists already' })
+        body: JSON.stringify({ error: 'Package already exists' }),
       };
     }
 
@@ -456,8 +478,13 @@ export const checkPackageRating = async (requestBody: PackageData): Promise<any>
     if (requestBody.URL) {
       //check the rating of the package from the url
       const url = await getGithubUrlFromUrl(requestBody.URL);
+      console.log('Resolved GitHub URL:', url); // Debug log
+
       const score = await netScore(url);
+      console.log('Score from netScore:', score); // Debug log
+
       const validScore = validateScore(score);
+      console.log('Is the score valid:', validScore); // Debug log
       if (!validScore) {
         return {
           statusCode: 424,
@@ -515,5 +542,15 @@ const uploadPackageMetadataToDynamoDB = async (scores: any, packageId: string): 
     console.error('Error uploading package scores to dynamoDB:', error);
     throw new Error('Error uploading package scores to dynamoDB');
   }
+};
+
+export const PackageController = {
+  uploadBase64ZipToS3,
+  getGithubUrlFromUrl,
+  checkPackageRating,
+  uploadPackageToS3,
+  uploadURLZipToS3,
+  generatePackageId,
+  fetchPackageJson
 };
 

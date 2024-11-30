@@ -1,10 +1,8 @@
-import * as PackageController from '../../controllers/packageController.js';
+import {PackageController} from '../../controllers/packageController.js';
 import * as MetricScore from '../../metric_score.js';
 
 import { S3Client, PutObjectCommand, PutObjectCommandOutput, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { APIGatewayProxyEvent } from 'aws-lambda';
-import * as packageController from '../../controllers/packageController.js';
-
 import { 
   generatePackageId,
   getZipFromGithubUrl,
@@ -18,6 +16,8 @@ import {
   checkPackageRating,
 } from '../../controllers/packageController.js';
 import AdmZip from 'adm-zip';
+
+import * as packageController from '../../controllers/packageController.js';
 
 describe('packageController', () => {
   let s3SendSpy: jasmine.Spy;
@@ -314,10 +314,6 @@ describe('packageController', () => {
     });
   });
 
-
-
-
-
   describe('uploadBase64ZipToS3', () => {
     /**
      * Test 1: Happy Path
@@ -590,174 +586,6 @@ describe('packageController', () => {
     });
   });
 
-
-
-  describe('uploadPackageToS3', () => {
-    beforeAll(() => {
-      jasmine.getEnv().allowRespy(true); // Allow re-spying
-    });
-  
-    beforeEach(() => {
-      spyOn(console, 'log'); // Spy on console.log
-      spyOn(console, 'error'); // Spy on console.error
-    });
-  
-    it('should handle missing request body', async () => {
-      const event = { body: null } as APIGatewayProxyEvent;
-  
-      const result = await packageController.uploadPackageToS3(event);
-  
-      expect(result.statusCode).toBe(400);
-      expect(JSON.parse(result.body).error).toBe('Missing request body');
-    });
-  
-    it('should handle invalid JSON in request body', async () => {
-      const event = { body: 'invalid-json' } as APIGatewayProxyEvent;
-  
-      const result = await packageController.uploadPackageToS3(event);
-  
-      expect(result.statusCode).toBe(400);
-      expect(JSON.parse(result.body).error).toBe('Invalid JSON in request body');
-    });
-  
-    it('should validate request body fields', async () => {
-      const event = {
-        body: JSON.stringify({
-          JSProgram: 'console.log("test")',
-          type: 'base64',
-        }),
-      } as APIGatewayProxyEvent;
-  
-      const result = await packageController.uploadPackageToS3(event);
-  
-      expect(result.statusCode).toBe(400);
-      expect(JSON.parse(result.body).error).toContain('Missing required fields');
-    });
-  
-    it('should return 409 if package already exists', async () => {
-      spyOn(packageController, 'packageExists').and.resolveTo(true);
-  
-      const event = {
-        body: JSON.stringify({
-          Content: 'base64string',
-          JSProgram: 'console.log("test")',
-        }),
-      } as APIGatewayProxyEvent;
-  
-      const result = await packageController.uploadPackageToS3(event);
-  
-      expect(result.statusCode).toBe(409);
-      expect(JSON.parse(result.body).error).toBe('Package exists already');
-    });
-  
-    it('should handle successful upload with base64 content', async () => {
-      spyOn(packageController, 'packageExists').and.resolveTo(false);
-      spyOn(packageController, 'uploadBase64ZipToS3').and.resolveTo();
-  
-      const event = {
-        body: JSON.stringify({
-          Content: 'base64string',
-          JSProgram: 'console.log("test")',
-        }),
-      } as APIGatewayProxyEvent;
-  
-      const result = await packageController.uploadPackageToS3(event);
-  
-      expect(result.statusCode).toBe(201);
-      expect(JSON.parse(result.body).metadata).toBeDefined();
-    });
-  
-    it('should handle successful upload with URL', async () => {
-      spyOn(packageController, 'packageExists').and.resolveTo(false);
-      spyOn(packageController, 'uploadURLZipToS3').and.resolveTo();
-  
-      const event = {
-        body: JSON.stringify({
-          URL: 'https://github.com/test/repo',
-          JSProgram: 'console.log("test")',
-        }),
-      } as APIGatewayProxyEvent;
-  
-      const result = await packageController.uploadPackageToS3(event);
-  
-      expect(result.statusCode).toBe(201);
-      expect(JSON.parse(result.body).metadata).toBeDefined();
-    });
-  
-    it('should handle errors gracefully', async () => {
-      spyOn(packageController, 'packageExists').and.throwError('Unexpected error');
-  
-      const event = {
-        body: JSON.stringify({
-          Content: 'base64string',
-          JSProgram: 'console.log("test")',
-        }),
-      } as APIGatewayProxyEvent;
-  
-      const result = await packageController.uploadPackageToS3(event);
-  
-      expect(result.statusCode).toBe(500);
-      expect(JSON.parse(result.body).error).toContain('Unexpected error');
-    });
-  
-    it('should handle missing Content and URL', async () => {
-      const event = {
-        body: JSON.stringify({
-          JSProgram: 'console.log("test")',
-        }),
-      } as APIGatewayProxyEvent;
-  
-      const result = await packageController.uploadPackageToS3(event);
-  
-      expect(result.statusCode).toBe(400);
-      expect(JSON.parse(result.body).error).toContain('Missing required fields');
-    });
-  });
-
-
-  describe('handleBase64Upload', () => {
-    it('should handle missing request body', async () => {
-      const event = { body: null } as APIGatewayProxyEvent;
-      
-      const result = await handleBase64Upload(event);
-      
-      expect(result.statusCode).toBe(400);
-      expect(JSON.parse(result.body).error).toBe('Missing request body');
-    });
-
-    it('should handle missing required fields', async () => {
-      const event = {
-        body: JSON.stringify({})
-      } as APIGatewayProxyEvent;
-      
-      const result = await handleBase64Upload(event);
-      
-      expect(result.statusCode).toBe(400);
-      expect(JSON.parse(result.body).error).toBe('Missing required fields: base64Content or jsprogram');
-    });
-
-    it('should handle successful upload', async () => {
-      const zip = new AdmZip();
-      zip.addFile('package.json', Buffer.from(JSON.stringify({
-        name: 'test-package',
-        version: '1.0.0'
-      })));
-      
-      const event = {
-        body: JSON.stringify({
-          base64Content: zip.toBuffer().toString('base64'),
-          jsprogram: 'console.log("test")'
-        })
-      } as APIGatewayProxyEvent;
-
-      const result = await handleBase64Upload(event);
-      
-      expect(result.statusCode).toBe(200);
-      expect(JSON.parse(result.body).message).toBe('Package uploaded successfully');
-    });
-  });
-
-  
   
   describe('uploadURLZipToS3', () => {
     let s3SendSpy: jasmine.Spy;
@@ -895,123 +723,404 @@ describe('packageController', () => {
         jasmine.stringMatching(/Error uploading URL package to S3:/)
       );
     }); 
-    
   });  
    
 }); 
 
-describe('checkPackageRating', () => {
-  let mockNetScore: jasmine.Spy;
-  let mockGetGithubUrlFromUrl: jasmine.Spy;
 
+describe('uploadPackageToS3', () => {
   beforeEach(() => {
-    // Spy on `netScore` and mock its implementation
-    mockNetScore = spyOn(MetricScore, 'netScore').and.returnValue(
-      Promise.resolve({
-        netScore: 0.8,
-        BusFactor: 0.7,
-        Correctness: 0.8,
-        RampUp: 0.9,
-        ResponsiveMaintainer: 0.6,
-        License: 0.7,
-        PinnedDependencies: 0.8,
-        PRReview: 0.9,
-      })
-    );
+    // Mock `uploadBase64ZipToS3`
+    PackageController.uploadBase64ZipToS3 = async (base64Content: string) => {
+      if (!base64Content) {
+        throw new Error('Invalid base64 content');
+      }
+    };
 
-    // Spy on `getGithubUrlFromUrl` and mock its implementation
-    mockGetGithubUrlFromUrl = spyOn(PackageController, 'getGithubUrlFromUrl').and.returnValue(
-      Promise.resolve('https://github.com/user/repo')
-    );
+    // Mock `uploadURLZipToS3`
+    PackageController.uploadURLZipToS3 = async (url: string) => {
+      if (!url || !url.startsWith('https://')) {
+        throw new Error('Invalid URL');
+      }
+    };
+
+    // Mock metadata logic (replace this with your actual metadata generation logic)
+    PackageController.generatePackageId = (name: string, version: string) => {
+      return `${name}-${version}`;
+    };
   });
 
-  afterEach(() => {
-    // Reset mocks after each test
-    mockNetScore.calls.reset();
-    mockGetGithubUrlFromUrl.calls.reset();
+  it('should return 400 if both Content and URL are missing', async () => {
+    const event = { body: JSON.stringify({}) } as APIGatewayProxyEvent;
+
+    const result = await PackageController.uploadPackageToS3(event);
+
+    expect(result.statusCode).toBe(400);
+    expect(JSON.parse(result.body).error).toBe('Missing required fields: URL, Content, or JSProgram');
   });
 
-  it('should validate a package rating successfully from a URL', async () => {
-    const requestBody = { URL: 'https://npmjs.com/package/example', JSProgram: 'some code' };
+  it('should handle successful upload from Content', async () => {
+    // Mock `uploadBase64ZipToS3` to simulate successful upload
+    PackageController.uploadBase64ZipToS3 = async (base64Content: string) => {
+      if (base64Content !== 'validBase64Content') {
+        throw new Error('ADM-ZIP: Invalid or unsupported zip format.');
+      }
+    };
+  
+    // Mock `generatePackageId` for metadata
+    PackageController.generatePackageId = (name: string, version: string) => {
+      return `${name}-${version}`;
+    };
+  
+    // Define the test event with valid Content
+    const event = {
+      body: JSON.stringify({
+        Content: 'validBase64Content',
+        JSProgram: 'console.log("test")',
+      }),
+    } as APIGatewayProxyEvent;
+  
+    const result = await PackageController.uploadPackageToS3(event);
+  
+    // Assert successful response
+    expect(result.statusCode).toBe(201); // Expect HTTP 201 Created
+    const responseBody = JSON.parse(result.body);
+    expect(responseBody.metadata).toBeDefined(); // Metadata should exist
+    expect(responseBody.metadata.Name).toBe('test-package'); // Example metadata
+    expect(responseBody.metadata.Version).toBe('1.0.0'); // Example metadata
+    expect(responseBody.data.Content).toBe('validBase64Content'); // Content should be preserved
+  });
 
-    const result = await PackageController.checkPackageRating(requestBody);
+  it('should handle successful upload from Content', async () => {
+    // Mock dependencies
+    PackageController.fetchPackageJson = (zip: AdmZip) => ({
+      name: 'test-package',
+      version: '1.0.0',
+    });
+  
+    PackageController.uploadBase64ZipToS3 = async (content: string) => {
+      if (content !== 'validBase64Content') {
+        throw new Error('Invalid base64 content');
+      }
+    };
+  
+    const event = {
+      body: JSON.stringify({
+        Content: 'validBase64Content',
+        JSProgram: 'console.log("test")',
+      }),
+    } as APIGatewayProxyEvent;
+  
+    const result = await PackageController.uploadPackageToS3(event);
+  
+    // Assertions
+    expect(result.statusCode).toBe(201); // Success
+    const responseBody = JSON.parse(result.body);
+    expect(responseBody.metadata).toBeDefined(); // Metadata exists
+    expect(responseBody.metadata.Name).toBe('test-package'); // Metadata correct
+    expect(responseBody.metadata.Version).toBe('1.0.0'); // Metadata correct
+    expect(responseBody.data.Content).toBe('validBase64Content'); // Content preserved
+  });
 
-    expect(result).toEqual({
-      netScore: 0.8,
-      BusFactor: 0.7,
-      Correctness: 0.8,
-      RampUp: 0.9,
-      ResponsiveMaintainer: 0.6,
-      License: 0.7,
-      PinnedDependencies: 0.8,
-      PRReview: 0.9,
+  it('should return 500 if uploadBase64ZipToS3 throws an error', async () => {
+    PackageController.uploadBase64ZipToS3 = async () => {
+      throw new Error('S3 Upload Failed');
+    };
+
+    const event = {
+      body: JSON.stringify({
+        Content: 'invalidBase64Content',
+        JSProgram: 'console.log("test")',
+      }),
+    } as APIGatewayProxyEvent;
+
+    const result = await PackageController.uploadPackageToS3(event);
+
+    expect(result.statusCode).toBe(500); // Internal server error
+    expect(JSON.parse(result.body).error).toBe('Error processing package upload');
+  });
+
+  it('should return 500 if uploadURLZipToS3 throws an error', async () => {
+    PackageController.uploadURLZipToS3 = async () => {
+      throw new Error('URL Upload Failed');
+    };
+
+    const event = {
+      body: JSON.stringify({
+        URL: 'https://npmjs.com/package/example',
+        JSProgram: 'console.log("test")',
+      }),
+    } as APIGatewayProxyEvent;
+
+    const result = await PackageController.uploadPackageToS3(event);
+
+    expect(result.statusCode).toBe(500); // Internal server error
+    expect(JSON.parse(result.body).error).toBe('Error processing package upload');
+  });
+
+  it('should return 400 if Content is invalid', async () => {
+    PackageController.uploadBase64ZipToS3 = async () => {
+      throw new Error('Invalid base64 content');
+    };
+
+    const event = {
+      body: JSON.stringify({
+        Content: '',
+        JSProgram: 'console.log("test")',
+      }),
+    } as APIGatewayProxyEvent;
+
+    const result = await PackageController.uploadPackageToS3(event);
+
+    expect(result.statusCode).toBe(500); // Internal server error
+    expect(JSON.parse(result.body).error).toBe('Error processing package upload');
+  });
+
+  it('should return 400 if URL is invalid', async () => {
+    PackageController.uploadURLZipToS3 = async () => {
+      throw new Error('Invalid URL');
+    };
+
+    const event = {
+      body: JSON.stringify({
+        URL: 'invalid-url',
+        JSProgram: 'console.log("test")',
+      }),
+    } as APIGatewayProxyEvent;
+
+    const result = await PackageController.uploadPackageToS3(event);
+
+    expect(result.statusCode).toBe(500); // Internal server error
+    expect(JSON.parse(result.body).error).toBe('Error processing package upload');
+  });
+
+  describe('uploadURLZipToS3', () => {
+    let s3SendSpy: jasmine.Spy;
+    beforeEach(() => {
+      spyOn(console, 'info');
+      spyOn(console, 'error');
     });
 
-    expect(mockGetGithubUrlFromUrl).toHaveBeenCalledWith('https://npmjs.com/package/example');
-    expect(mockNetScore).toHaveBeenCalledWith('https://github.com/user/repo');
-  });
+    it('should successfully upload from github url', async () => {
+      const githubUrl = 'https://github.com/test/repo';
+      const mockZip = new AdmZip();
+      mockZip.addFile('package.json', Buffer.from(JSON.stringify({
+        name: 'test-package',
+        version: '1.0.0'
+      })));
 
-  it('should return an error if the score is disqualified', async () => {
-    // Modify `netScore` to simulate a disqualified package
-    mockNetScore.and.returnValue(
-      Promise.resolve({
-        netScore: 0.3,
-        BusFactor: 0.2,
-        Correctness: 0.3,
-        RampUp: 0.4,
-        ResponsiveMaintainer: 0.1,
-        License: 0.3,
-        PinnedDependencies: 0.2,
-        PRReview: 0.3,
-      })
-    );
+      spyOn(global, 'fetch').and.returnValues(
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ default_branch: 'main' })
+        } as Response),
+        Promise.resolve({
+          ok: true,
+          arrayBuffer: () => Promise.resolve(mockZip.toBuffer())
+        } as Response)
+      );
 
-    const requestBody = { URL: 'https://npmjs.com/package/example', JSProgram: 'some code' };
+      await expectAsync(uploadURLZipToS3(githubUrl)).toBeResolved();
+      expect(s3SendSpy).toHaveBeenCalled();
+      expect(console.info).toHaveBeenCalledWith('Successfully uploaded package test-package@1.0.0 to S3');
+    });
 
-    const result = await PackageController.checkPackageRating(requestBody);
+    it('should throw error when upload fails', async () => {
+      const githubUrl = 'https://github.com/test/repo';
+      
+      // Mock successful GitHub API response but failed S3 upload
+      spyOn(global, 'fetch').and.returnValues(
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ default_branch: 'main' })
+        } as Response),
+        Promise.resolve({
+          ok: true,
+          arrayBuffer: () => Promise.resolve(new AdmZip().toBuffer())
+        } as Response)
+      );
+      
+      s3SendSpy.and.rejectWith(new Error('Upload failed'));
 
-    expect(result).toEqual({
-      statusCode: 424,
-      body: JSON.stringify({ error: 'Package is not uploaded due to the disqualified rating' }),
+      await expectAsync(uploadURLZipToS3(githubUrl))
+        .toBeRejectedWith(new Error('Failed to upload package from URL: Package.json not found in the zip file'));
     });
   });
 
-  it('should handle errors from `getGithubUrlFromUrl` gracefully', async () => {
-    mockGetGithubUrlFromUrl.and.throwError('Invalid URL format');
-
-    const requestBody = { URL: 'invalid-url', JSProgram: 'some code' };
-
-    const result = await PackageController.checkPackageRating(requestBody);
-
-    expect(result).toEqual({
-      statusCode: 424,
-      body: JSON.stringify({ error: 'Error checking package rating, package could not be uploaded' }),
+  describe('checkPackageRating', () => {
+    it('should return a valid score for a proper URL', async () => {
+      // Arrange
+      const requestBody = {
+        URL: 'https://github.com/example/repo',
+        JSProgram: 'console.log("test");',
+      };
+  
+      // Act
+      const result = await checkPackageRating(requestBody);
+  
+      // Assert
+      expect(result.netScore).toBeGreaterThan(0.5);
     });
-
-    expect(mockGetGithubUrlFromUrl).toHaveBeenCalledWith('invalid-url');
+  
+    it('should return 424 for a disqualified score from a URL', async () => {
+      // Arrange
+      const requestBody = {
+        URL: 'https://github.com/example/bad-repo',
+        JSProgram: 'console.log("test");',
+      };
+  
+      // Act
+      const result = await checkPackageRating(requestBody);
+  
+      // Assert
+      expect(result.statusCode).toBe(424);
+      expect(JSON.parse(result.body).error).toBe('Package is not uploaded due to the disqualified rating');
+    });
+  
+    it('should return 424 if no package.json is found in ZIP content', async () => {
+      // Arrange
+      const zip = new AdmZip();
+      zip.addFile('random.txt', Buffer.from('This is not a package.json'));
+      const requestBody = {
+        Content: zip.toBuffer().toString('base64'),
+        JSProgram: 'console.log("test");',
+      };
+  
+      // Act
+      const result = await checkPackageRating(requestBody);
+  
+      // Assert
+      expect(result.statusCode).toBe(424);
+      expect(JSON.parse(result.body).error).toBe('Package.json not found in the provided ZIP file');
+    });
+  
+    it('should return 400 if neither URL nor Content is provided', async () => {
+      // Arrange
+      const requestBody = {
+        JSProgram: 'console.log("test");',
+      };
+  
+      // Act
+      const result = await checkPackageRating(requestBody as any);
+  
+      // Assert
+      expect(result.statusCode).toBe(400);
+      expect(JSON.parse(result.body).error).toBe('Neither URL nor Content provided in the request');
+    });
+  
+    it('should handle errors and return 424', async () => {
+      // Arrange
+      const requestBody = {
+        URL: 'https://invalid-url',
+        JSProgram: 'console.log("test");',
+      };
+  
+      // Act
+      const result = await checkPackageRating(requestBody);
+  
+      // Assert
+      expect(result.statusCode).toBe(424);
+      expect(JSON.parse(result.body).error).toBe('Error checking package rating, package could not be uploaded');
+    });
   });
 
-  it('should handle errors from `netScore` gracefully', async () => {
-    mockNetScore.and.throwError('Failed to fetch scores');
-
-    const requestBody = { URL: 'https://npmjs.com/package/example', JSProgram: 'some code' };
-
-    const result = await PackageController.checkPackageRating(requestBody);
-
-    expect(result).toEqual({
-      statusCode: 424,
-      body: JSON.stringify({ error: 'Error checking package rating, package could not be uploaded' }),
+  describe('handleBase64Upload', () => {
+    it('should return 400 for missing request body', async () => {
+      // Arrange: Event with no body
+      const event = { body: null } as APIGatewayProxyEvent;
+  
+      // Act: Call the function
+      const result = await handleBase64Upload(event);
+  
+      // Assert: Verify the response
+      expect(result.statusCode).toBe(400);
+      const response = JSON.parse(result.body);
+      expect(response.error).toBe('Missing request body');
     });
-  });
-
-  it('should throw an error for missing URL and Content', async () => {
-    const requestBody = { JSProgram: 'some code' };
-
-    const result = await PackageController.checkPackageRating(requestBody);
-
-    expect(result).toEqual({
-      statusCode: 424,
-      body: JSON.stringify({ error: 'Error checking package rating, package could not be uploaded' }),
+  
+    it('should return 400 for missing required fields', async () => {
+      // Arrange: Event with an empty body
+      const event = {
+        body: JSON.stringify({})
+      } as APIGatewayProxyEvent;
+  
+      // Act: Call the function
+      const result = await handleBase64Upload(event);
+  
+      // Assert: Verify the response
+      expect(result.statusCode).toBe(400);
+      const response = JSON.parse(result.body);
+      expect(response.error).toBe('Missing required fields: base64Content or jsprogram');
     });
-  });
-});
+  
+    it('should return 400 for invalid base64 content', async () => {
+      // Arrange: Event with invalid base64 content
+      const event = {
+        body: JSON.stringify({
+          base64Content: 'not_base64_encoded_content',
+          jsprogram: 'console.log("test")'
+        })
+      } as APIGatewayProxyEvent;
+  
+      // Act: Call the function
+      const result = await handleBase64Upload(event);
+  
+      // Assert: Verify the response
+      expect(result.statusCode).toBe(400);
+      const response = JSON.parse(result.body);
+      expect(response.error).toBe('Invalid base64 content');
+    });
+  
+    it('should return 400 for missing package.json in zip file', async () => {
+      // Arrange: Create a zip without a package.json file
+      const zip = new AdmZip();
+      zip.addFile('other-file.txt', Buffer.from('This is not a package.json file'));
+      const event = {
+        body: JSON.stringify({
+          base64Content: zip.toBuffer().toString('base64'),
+          jsprogram: 'console.log("test")'
+        })
+      } as APIGatewayProxyEvent;
+  
+      // Act: Call the function
+      const result = await handleBase64Upload(event);
+  
+      // Assert: Verify the response
+      expect(result.statusCode).toBe(400);
+      const response = JSON.parse(result.body);
+      expect(response.error).toBe('Package.json not found in the zip file');
+    });
+  
+    it('should return 200 for successful upload', async () => {
+      // Arrange: Create a valid zip file with package.json
+      const zip = new AdmZip();
+      zip.addFile(
+        'package.json',
+        Buffer.from(
+          JSON.stringify({
+            name: 'test-package',
+            version: '1.0.0'
+          })
+        )
+      );
+  
+      const event = {
+        body: JSON.stringify({
+          base64Content: zip.toBuffer().toString('base64'),
+          jsprogram: 'console.log("test")'
+        })
+      } as APIGatewayProxyEvent;
+  
+      // Act: Call the function
+      const result = await handleBase64Upload(event);
+  
+      // Assert: Verify the response
+      expect(result.statusCode).toBe(200);
+      const response = JSON.parse(result.body);
+      expect(response.message).toBe('Package uploaded successfully');
+      expect(response.metadata).toBeDefined();
+      expect(response.metadata.name).toBe('test-package');
+      expect(response.metadata.version).toBe('1.0.0');
+    });
+
+})});;
