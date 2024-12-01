@@ -33,8 +33,8 @@ jobs:
     # - name: Test
     #   run: npm run test:single
 
-    - name: Rename handler file
-      run: mv dist/handlers/lambdaHandler.js dist/handlers/lambdaHandler.mjs
+    - name: Rename uploadPackage handler file
+      run: mv dist/handlers/uploadPackageLambdaHandler.js dist/handlers/uploadPackageLambdaHandler.mjs
 
     - name: Prepare for deployment
       run: npm prune --production
