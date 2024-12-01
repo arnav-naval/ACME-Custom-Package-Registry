@@ -18,7 +18,7 @@ const dynamoDb = new DynamoDBClient({
 })
 
 //Interface for the request body of PackageData
-interface PackageData {
+export interface PackageData {
   Content?: string;
   URL?: string;
   JSProgram: string;
@@ -183,30 +183,6 @@ export const fetchPackageJson = (zip: AdmZip): { name: string, version: string }
   };
 };
 
-//Function to process the request body of URL, Content, and JSProgram
-const validateRequestBody = (body: PackageData): { isValid: boolean, error?: string } => {
-   // Check if either URL or Content is provided
-   if (!body.URL && !body.Content) {
-    return {
-      isValid: false,
-      error: 'Missing required fields: Must provide either URL or Content',
-    };
-  }
-
-  // Check if both URL and Content are provided (not allowed)
-  if (body.URL && body.Content) {
-    return {
-      isValid: false,
-      error: 'Cannot provide both URL and Content fields',
-    };
-  }
-
-  //If all checks pass, return true
-  return {
-    isValid: true,
-  }; 
-};
-
 //Function to upload the zip file to S3 from a github url
 export const uploadURLZipToS3 = async (githubUrl: string): Promise<void> => {
   try {
@@ -264,46 +240,8 @@ const packageExists = async (packageId: string): Promise<boolean> => {
 };
 
 // function to upload a package to S3
-export const uploadPackage = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const uploadPackage = async (requestBody: PackageData): Promise<APIGatewayProxyResult> => {
   try {
-    //Check if request body is missing
-    if (!event.body) {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ error: 'Missing request body' }),
-      };
-    }
-
-    let requestBody: PackageData;
-    try {
-      // If body is a string, parse it; otherwise use it directly
-      requestBody = typeof event.body === 'string' 
-        ? JSON.parse(event.body) 
-        : event.body as PackageData;
-      
-      // Debug logging
-      console.log('Parsed request body:', requestBody);
-    } catch (parseError) {
-      console.error('JSON parsing error:', parseError);
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ 
-          error: 'Invalid JSON in request body',
-        }),
-      };
-    }
-
-    const validationResult = validateRequestBody(requestBody);
-    console.log('Validation result:', validationResult);
-    
-    //Check if validation fails
-    if (!validationResult.isValid) {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ error: validationResult.error }),
-      };
-    }
-    
     //Fetch name and version from package json (repeated work)
     let zip: AdmZip;
     let name: string;
