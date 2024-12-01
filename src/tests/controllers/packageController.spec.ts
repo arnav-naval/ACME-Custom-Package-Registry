@@ -194,7 +194,7 @@ describe('packageController', () => {
     it('should handle missing request body', async () => {
       const event = { body: null } as APIGatewayProxyEvent;
       
-      const result = await uploadPackageToS3(event);
+      const result = await uploadPackage(event);
       
       expect(result.statusCode).toBe(400);
       expect(JSON.parse(result.body).error).toBe('Missing request body');
@@ -205,7 +205,7 @@ describe('packageController', () => {
         body: 'invalid-json'
       } as APIGatewayProxyEvent;
       
-      const result = await uploadPackageToS3(event);
+      const result = await uploadPackage(event);
       
       expect(result.statusCode).toBe(400);
       expect(JSON.parse(result.body).error).toBe('Invalid JSON in request body');
@@ -219,52 +219,10 @@ describe('packageController', () => {
         })
       } as APIGatewayProxyEvent;
 
-      const result = await uploadPackageToS3(event);
+      const result = await uploadPackage(event);
       
       expect(result.statusCode).toBe(400);
       expect(JSON.parse(result.body).error).toContain('Missing required fields');
-    });
-  });
-
-  describe('handleBase64Upload', () => {
-    it('should handle missing request body', async () => {
-      const event = { body: null } as APIGatewayProxyEvent;
-      
-      const result = await handleBase64Upload(event);
-      
-      expect(result.statusCode).toBe(400);
-      expect(JSON.parse(result.body).error).toBe('Missing request body');
-    });
-
-    it('should handle missing required fields', async () => {
-      const event = {
-        body: JSON.stringify({})
-      } as APIGatewayProxyEvent;
-      
-      const result = await handleBase64Upload(event);
-      
-      expect(result.statusCode).toBe(400);
-      expect(JSON.parse(result.body).error).toBe('Missing required fields: base64Content or jsprogram');
-    });
-
-    it('should handle successful upload', async () => {
-      const zip = new AdmZip();
-      zip.addFile('package.json', Buffer.from(JSON.stringify({
-        name: 'test-package',
-        version: '1.0.0'
-      })));
-      
-      const event = {
-        body: JSON.stringify({
-          base64Content: zip.toBuffer().toString('base64'),
-          jsprogram: 'console.log("test")'
-        })
-      } as APIGatewayProxyEvent;
-
-      const result = await handleBase64Upload(event);
-      
-      expect(result.statusCode).toBe(200);
-      expect(JSON.parse(result.body).message).toBe('Package uploaded successfully');
     });
   });
 

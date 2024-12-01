@@ -1,6 +1,6 @@
 //package controller to define functionality for routes for uploading and downloading packages
 import { S3Client, PutObjectCommand, HeadObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
-import { DynamoDBClient, PutItemCommand } from '@aws-sdk/client-dynamodb';
+import { DynamoDBClient, PutItemCommand, DeleteItemCommand } from '@aws-sdk/client-dynamodb';
 import { marshall } from '@aws-sdk/util-dynamodb';
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { netScore } from '../metric_score.js';
@@ -327,17 +327,13 @@ export const uploadPackage = async (event: APIGatewayProxyEvent): Promise<APIGat
         body: JSON.stringify({ error: 'Package exists already' })
       };
     }
-    
-    //!!!!!!
-    //Need to add in cleanup for S3 bucket if dynamodb upload fails
-
-
+  
     //Check the package rating
     const packageRatingScore = await checkPackageRating(requestBody);
     console.log('Package rating score:', packageRatingScore);
     
     // Add error handling
-    if ('statusCode' in packageRatingScore && packageRatingScore.statusCode === 424) {
+    if ('statusCode' in packageRatingScore && packageRatingScore.statusCode === 424 && requestBody.URL) {
       return {
         statusCode: packageRatingScore.statusCode,
         body: packageRatingScore.body
@@ -374,6 +370,20 @@ export const uploadPackage = async (event: APIGatewayProxyEvent): Promise<APIGat
       };
     }
 
+    //Upload package metadata to main table
+    try {
+      await uploadPackageMetadataToMainTable(packageId, name, version);
+    } catch (error) {
+      //delete package from S3 bucket
+      await deletePackageFromS3(packageId);
+      //delete scores row from dynamoDB
+      await deleteScoresFromDynamoDB(packageId);
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ error: 'Error uploading package metadata to main table' })
+      };
+    }
+
     //Return the successful response
     return {
       statusCode: 201,
@@ -404,6 +414,21 @@ const deletePackageFromS3 = async (packageId: string): Promise<void> => {
     throw new Error(`Failed to delete package from S3: ${error.message}`);
   }
 };
+
+//Function to delete the scores row for specific package ID from dynamoDB
+const deleteScoresFromDynamoDB = async (packageId: string): Promise<void> => {
+  try {
+    const command = new DeleteItemCommand({
+      TableName: process.env.SCORES_TABLE_NAME,
+      Key: marshall({ id: packageId }),
+    });
+    await dynamoDb.send(command);
+    console.info(`Successfully deleted package ${packageId} scores from dynamoDB`);
+  } catch (error) {
+    console.error(`Error deleting package ${packageId} scores from dynamoDB:`, error);
+    throw new Error(`Failed to delete package scores from dynamoDB: ${error.message}`);
+  }
+}
 
 //Function to validate the score and ensure all scores are above 0.5
 const validateScore = (score: any): boolean => {
@@ -521,3 +546,26 @@ const uploadPackageMetadataToDynamoDB = async (scores: any, packageId: string): 
   }
 };
 
+//Function to upload package metadata to main table
+const uploadPackageMetadataToMainTable = async (packageId: string, name: string, version: string) => {
+  try {
+    const item = {
+      PackageId: packageId,
+      name: name,
+      version: version,
+      timestamp: new Date().toISOString(),
+    }
+
+    const params = {
+      TableName: process.env.PACKAGES_TABLE_NAME,
+      Item: marshall(item),
+    };
+
+    const command = new PutItemCommand(params);
+    await dynamoDb.send(command);
+    console.info(`Successfully uploaded package ${packageId} to main table`);
+  } catch (error) {
+    console.error('Error uploading package to main table:', error);
+    throw new Error('Error uploading package to main table');
+  }
+}
