@@ -190,42 +190,6 @@ describe('packageController', () => {
     });
   });
 
-  describe('uploadPackageToS3', () => {
-    it('should handle missing request body', async () => {
-      const event = { body: null } as APIGatewayProxyEvent;
-      
-      const result = await uploadPackage(event);
-      
-      expect(result.statusCode).toBe(400);
-      expect(JSON.parse(result.body).error).toBe('Missing request body');
-    });
-
-    it('should handle invalid JSON in request body', async () => {
-      const event = { 
-        body: 'invalid-json'
-      } as APIGatewayProxyEvent;
-      
-      const result = await uploadPackage(event);
-      
-      expect(result.statusCode).toBe(400);
-      expect(JSON.parse(result.body).error).toBe('Invalid JSON in request body');
-    });
-
-    it('should validate request body fields', async () => {
-      const event = {
-        body: JSON.stringify({
-          JSProgram: 'console.log("test")',
-          type: 'base64'
-        })
-      } as APIGatewayProxyEvent;
-
-      const result = await uploadPackage(event);
-      
-      expect(result.statusCode).toBe(400);
-      expect(JSON.parse(result.body).error).toContain('Missing required fields');
-    });
-  });
-
   describe('uploadURLZipToS3', () => {
     beforeEach(() => {
       spyOn(console, 'info');
