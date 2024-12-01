@@ -5,8 +5,7 @@ import {
   fetchPackageJson, 
   getGithubUrlFromUrl,
   uploadURLZipToS3,
-  uploadPackageToS3,
-  handleBase64Upload,
+  uploadPackage,
 } from '../../controllers/packageController.js';
 import AdmZip from 'adm-zip';
 

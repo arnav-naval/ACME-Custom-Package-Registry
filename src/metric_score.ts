@@ -26,6 +26,7 @@ const measureLatency = async (fn: () => Promise<any>, label: string) => {
 
 // takes as input URL and returns a score
 export async function netScore(url: string): Promise<any> {
+  const start = Date.now();
   let data, openIssues, closedIssues;
   // convert npm URL to GitHub URL
   if (url.includes("npmjs.com")) {
@@ -125,6 +126,7 @@ export async function netScore(url: string): Promise<any> {
   
   netScore = parseFloat(netScore.toFixed(2));
 
+  const netScoreLatency = Date.now() - start;
   // construct result object, JSONify, then return
   const result = {
     NetScore: netScore,
@@ -132,9 +134,17 @@ export async function netScore(url: string): Promise<any> {
     Correctness: Correctness.score,
     BusFactor: BusFactor.score,
     ResponsiveMaintainer: ResponsiveMaintainer.score,
-    License: License.score,
-    PinnedDependencies: PinnedDependencies.score,
-    PRReview: PRReview.score,
+    LicenseScore: License.score,
+    GoodPinningPractice: PinnedDependencies.score,
+    PullRequest: PRReview.score,
+    RampUpLatency: RampUp.latency,
+    CorrectnessLatency: Correctness.latency,
+    BusFactorLatency: BusFactor.latency,
+    ResponsiveMaintainerLatency: ResponsiveMaintainer.latency,
+    LicenseScoreLatency: License.latency,
+    GoodPinningPracticeLatency: PinnedDependencies.latency,
+    PullRequestLatency: PRReview.latency,
+    NetScoreLatency: netScoreLatency,
   };
 
   console.info(`Processed URL: ${url}, Score: ${netScore}`);

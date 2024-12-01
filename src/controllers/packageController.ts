@@ -1,5 +1,5 @@
 //package controller to define functionality for routes for uploading and downloading packages
-import { S3Client, PutObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, HeadObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { DynamoDBClient, PutItemCommand } from '@aws-sdk/client-dynamodb';
 import { marshall } from '@aws-sdk/util-dynamodb';
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
@@ -22,19 +22,6 @@ interface PackageData {
   Content?: string;
   URL?: string;
   JSProgram: string;
-}
-
-//Interface for the metadata of PackageData
-interface PackageMetadata {
-  Name: string;
-  Version: string;
-  ID: string;
-}
-
-//Interface for the response body of PackageData
-interface PackageResponse {
-  metadata: PackageMetadata;
-  data: PackageData;
 }
 
 //Function to generate a unique package id
@@ -198,27 +185,11 @@ export const fetchPackageJson = (zip: AdmZip): { name: string, version: string }
 
 //Function to process the request body of URL, Content, and JSProgram
 const validateRequestBody = (body: PackageData): { isValid: boolean, error?: string } => {
-  //Check if all required fields are presen
-  if (!body.URL && !body.Content && !body.JSProgram) {
-    return {
-      isValid: false,
-      error: 'Missing required fields: URL, Content, or JSProgram',
-    };
-  }
-
    // Check if either URL or Content is provided
    if (!body.URL && !body.Content) {
     return {
       isValid: false,
       error: 'Missing required fields: Must provide either URL or Content',
-    };
-  }
-
-  //Check if JSProgram is provided
-  if (!body.JSProgram) {
-    return {
-      isValid: false,
-      error: 'Missing required fields: JSProgram',
     };
   }
 
@@ -293,7 +264,7 @@ const packageExists = async (packageId: string): Promise<boolean> => {
 };
 
 // function to upload a package to S3
-export const uploadPackageToS3 = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const uploadPackage = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
     //Check if request body is missing
     if (!event.body) {
@@ -356,6 +327,10 @@ export const uploadPackageToS3 = async (event: APIGatewayProxyEvent): Promise<AP
         body: JSON.stringify({ error: 'Package exists already' })
       };
     }
+    
+    //!!!!!!
+    //Need to add in cleanup for S3 bucket if dynamodb upload fails
+
 
     //Check the package rating
     const packageRatingScore = await checkPackageRating(requestBody);
@@ -373,77 +348,60 @@ export const uploadPackageToS3 = async (event: APIGatewayProxyEvent): Promise<AP
     const metadata = {
       Name: name,
       Version: version,
+      ID: packageId,
     };
 
     //Upload the base 64 zip to S3 if Content is provided
     if (requestBody.Content) {
+      console.log('Uploading base64 package to S3');
       await uploadBase64ZipToS3(requestBody.Content);
     }
-
     //Else URL must be provided
     else {
       console.log('Uploading URL package to S3');
       await uploadURLZipToS3(requestBody.URL);
     }
+
     //Since we havent exited, save package scores to dynamoDb
-    await uploadPackageMetadataToDynamoDB(packageRatingScore, packageId);
+    try {
+      await uploadPackageMetadataToDynamoDB(packageRatingScore, packageId);
+    } catch (error) {
+      //delete package from S3 bucket
+      await deletePackageFromS3(packageId);
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ error: 'Error uploading package scores to dynamoDB' })
+      };
+    }
 
     //Return the successful response
     return {
       statusCode: 201,
-      body: JSON.stringify({
-        metadata,
-        data: requestBody
-      })
+      body: JSON.stringify({metadata: metadata, data: requestBody})
     };
   } catch (err) {
-    console.error('Error processing package upload:', {
-      error: err,
-      errorMessage: err instanceof Error ? err.message : 'Unknown error',
-      errorStack: err instanceof Error ? err.stack : undefined
-    });
+    console.error('Error processing package upload:', err);
     
     return {
       statusCode: 500,
       body: JSON.stringify({ 
-        error: err instanceof Error ? err.message : 'Error processing package upload',
-        details: process.env.NODE_ENV === 'development' ? err : undefined
+        error: err instanceof Error ? err.message : 'Error processing package upload'
       }),
     };
   }
 };
 
-//Function to handle the base64 upload
-export const handleBase64Upload = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+const deletePackageFromS3 = async (packageId: string): Promise<void> => {
   try {
-    if (!event.body) {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ error: 'Missing request body' })
-      };
-    }
-
-    const { base64Content, jsprogram } = JSON.parse(event.body);
-    
-    if (!base64Content || !jsprogram) {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ error: 'Missing required fields: base64Content or jsprogram' })
-      };
-    }
-
-    await uploadBase64ZipToS3(base64Content);
-    
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ message: 'Package uploaded successfully' })
-    };
+    const command = new DeleteObjectCommand({
+      Bucket: process.env.BUCKET_NAME,
+      Key: `${packageId}.zip`,
+    });
+    await s3.send(command);
+    console.info(`Successfully deleted package ${packageId} from S3`);
   } catch (error) {
-    console.error('Error handling base64 upload:', error);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: 'Internal server error' })
-    };
+    console.error(`Error deleting package ${packageId} from S3:`, error);
+    throw new Error(`Failed to delete package from S3: ${error.message}`);
   }
 };
 
@@ -551,7 +509,7 @@ const uploadPackageMetadataToDynamoDB = async (scores: any, packageId: string): 
 
     const params = {
       TableName: process.env.SCORES_TABLE_NAME,
-      Item: marshall(item, { removeUndefinedValues: true }),
+      Item: marshall(item),
     };
 
     const command = new PutItemCommand(params);
