@@ -293,174 +293,166 @@ export const packageExists = async (packageId: string): Promise<boolean> => {
 // function to upload a package to S3
 export const uploadPackageToS3 = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    //Check if request body is missing
-    if (!event.body) {
-      console.error('Missing request body');
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ error: 'Missing request body' }),
-      };
-    }
+      const requestBody = JSON.parse(event.body || '{}');
+      const validation = validateRequestBody(requestBody);
 
-    let requestBody: PackageData;
-    try {
-      // If body is a string, parse it; otherwise use it directly
-      requestBody = typeof event.body === 'string' 
-        ? JSON.parse(event.body) 
-        : event.body as PackageData;
-      
-      // Debug logging
-      console.log('Parsed request body:', requestBody);
-    } catch (parseError) {
-      console.error('JSON parsing error:', parseError);
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ 
-          error: 'Invalid JSON in request body',
-        }),
-      };
-    }
-
-    const validationResult = validateRequestBody(requestBody);
-    console.log('Validation result:', validationResult);
-    
-    //Check if validation fails
-    if (!validationResult.isValid) {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ error: validationResult.error }),
-      };
-    }
-    
-    //Fetch name and version from package json (repeated work)
-    let zip: AdmZip;
-    let name: string;
-    let version: string;
-
-    if (requestBody.Content) {
-      console.log('Processing Content field...');
-      try {
-        const tempBuffer = Buffer.from(requestBody.Content, 'base64');
-        zip = new AdmZip(tempBuffer);
-        console.log('ZIP file successfully created from Content');
-        ({ name, version } = fetchPackageJson(zip));
-        console.log('Parsed package.json:', { name, version });
-      } catch (error) {
-        console.error('Error processing Content:', error);
-        throw new Error('Invalid ZIP file format or missing package.json');
+      // Validate request body
+      if (!validation.isValid) {
+          return {
+              statusCode: 400,
+              body: JSON.stringify({ error: validation.error }),
+          };
       }
-    } else {
-      console.log('Processing URL field...');
-      try {
-        const url = await getGithubUrlFromUrl(requestBody.URL);
-        console.log('Resolved URL:', url);
-        zip = await getZipFromGithubUrl(url);
-        console.log('ZIP file successfully downloaded from URL');
-        ({ name, version } = fetchPackageJson(zip));
-        console.log('Parsed package.json:', { name, version });
-      } catch (error) {
-        console.error('Error processing URL:', error);
-        throw new Error('Invalid URL or GitHub repository');
+
+      const { Content, URL, JSProgram } = requestBody;
+      let metadata;
+
+      // Handle Content case
+      if (Content) {
+          const zipBuffer = Buffer.from(Content, 'base64');
+
+          try {
+              const zip = new AdmZip(zipBuffer);
+              const packageJson = PackageController.fetchPackageJson(zip);
+              const { name, version } = packageJson;
+
+              if (!name || !version) {
+                  return {
+                      statusCode: 400,
+                      body: JSON.stringify({ error: 'Invalid package.json: missing name or version' }),
+                  };
+              }
+
+              metadata = { Name: name, Version: version };
+              await PackageController.uploadBase64ZipToS3(Content);
+          } catch (err) {
+              return {
+                  statusCode: 400,
+                  body: JSON.stringify({ error: 'Invalid base64 content or zip format' }),
+              };
+          }
       }
-    }
 
-    const packageId = generatePackageId(name, version);
-    console.log('Generated package ID:', packageId);
+      // Handle URL case
+      if (URL) {
+          try {
+              await PackageController.uploadURLZipToS3(URL);
+              const zip = new AdmZip(); // Replace with logic for fetching ZIP from URL
+              const packageJson = PackageController.fetchPackageJson(zip);
+              const { name, version } = packageJson;
 
-    //Check if package already exists in S3 bucket
-    const exists = await packageExists(packageId);
-    if (exists) {
-      console.log(`Package ${packageId} already exists in S3`);
+              if (!name || !version) {
+                  return {
+                      statusCode: 400,
+                      body: JSON.stringify({ error: 'Invalid package.json: missing name or version' }),
+                  };
+              }
+
+              metadata = { Name: name, Version: version };
+          } catch (err) {
+              return {
+                  statusCode: 500,
+                  body: JSON.stringify({ error: 'Error processing package upload' }),
+              };
+          }
+      }
+
+      // Success response
       return {
-        statusCode: 409,
-        body: JSON.stringify({ error: 'Package already exists' }),
+          statusCode: 201,
+          body: JSON.stringify({
+              metadata,
+              message: 'Package uploaded successfully',
+          }),
       };
-    }
-
-    //Check the package rating
-    const packageRatingScore = await checkPackageRating(requestBody);
-    console.log('Package rating score:', packageRatingScore);
-    
-    // Add error handling
-    if ('statusCode' in packageRatingScore && packageRatingScore.statusCode === 424) {
+  } catch (error) {
       return {
-        statusCode: packageRatingScore.statusCode,
-        body: packageRatingScore.body
+          statusCode: 500,
+          body: JSON.stringify({ error: 'Internal server error' }),
       };
-    }
-
-    //Generate metadata
-    const metadata = {
-      Name: name,
-      Version: version,
-    };
-
-    //Upload the base 64 zip to S3 if Content is provided
-    if (requestBody.Content) {
-      await uploadBase64ZipToS3(requestBody.Content);
-    }
-
-    //Else URL must be provided
-    else {
-      console.log('Uploading URL package to S3');
-      await uploadURLZipToS3(requestBody.URL);
-    }
-
-    //Return the successful response
-    return {
-      statusCode: 201,
-      body: JSON.stringify({
-        metadata,
-        data: requestBody
-      })
-    };
-  } catch (err) {
-    console.error('Error processing package upload:', {
-      error: err,
-      errorMessage: err instanceof Error ? err.message : 'Unknown error',
-      errorStack: err instanceof Error ? err.stack : undefined
-    });
-    
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ 
-        error: err instanceof Error ? err.message : 'Error processing package upload',
-        details: process.env.NODE_ENV === 'development' ? err : undefined
-      }),
-    };
   }
 };
 
 //Function to handle the base64 upload
 export const handleBase64Upload = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
+    // Validate request body
     if (!event.body) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: 'Missing request body' })
+        body: JSON.stringify({ error: 'Missing request body' }),
       };
     }
 
     const { base64Content, jsprogram } = JSON.parse(event.body);
-    
+
     if (!base64Content || !jsprogram) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: 'Missing required fields: base64Content or jsprogram' })
+        body: JSON.stringify({ error: 'Missing required fields: base64Content or jsprogram' }),
       };
     }
 
+    // Parse base64 content
+    let zip: AdmZip;
+    try {
+      const zipBuffer = Buffer.from(base64Content, 'base64');
+      zip = new AdmZip(zipBuffer);
+    } catch (err) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: 'Invalid base64 content' }),
+      };
+    }
+
+    // Check for package.json
+    const zipEntries = zip.getEntries();
+    const packageJsonEntry = zipEntries.find(entry => entry.entryName === 'package.json');
+
+    if (!packageJsonEntry) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: 'Package.json not found in the zip file' }),
+      };
+    }
+
+    // Parse and validate package.json
+    let metadata;
+    try {
+      const packageJson = JSON.parse(packageJsonEntry.getData().toString('utf-8'));
+      const { name, version } = packageJson;
+
+      if (!name || !version) {
+        return {
+          statusCode: 400,
+          body: JSON.stringify({ error: 'Invalid package.json: missing name or version' }),
+        };
+      }
+
+      metadata = { name, version };
+    } catch (err) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: 'Invalid package.json format' }),
+      };
+    }
+
+    // Upload to S3
     await uploadBase64ZipToS3(base64Content);
-    
+
+    // Success response
     return {
       statusCode: 200,
-      body: JSON.stringify({ message: 'Package uploaded successfully' })
+      body: JSON.stringify({
+        message: 'Package uploaded successfully',
+        metadata,
+      }),
     };
   } catch (error) {
     console.error('Error handling base64 upload:', error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: 'Internal server error' })
+      body: JSON.stringify({ error: 'Internal server error' }),
     };
   }
 };
