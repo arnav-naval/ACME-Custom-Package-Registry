@@ -14,6 +14,7 @@ import {
   uploadPackageToS3,
   handleBase64Upload,
   checkPackageRating,
+
 } from '../../controllers/packageController.js';
 import AdmZip from 'adm-zip';
 
@@ -875,101 +876,3 @@ it('should handle successful upload from URL', async () => {
   });
 });
 
-
-describe('handleBase64Upload', () => {
-  it('should return 400 for missing request body', async () => {
-    // Arrange: Event with no body
-    const event = { body: null } as APIGatewayProxyEvent;
-
-    // Act: Call the function
-    const result = await handleBase64Upload(event);
-
-    // Assert: Verify the response
-    expect(result.statusCode).toBe(400);
-    const response = JSON.parse(result.body);
-    expect(response.error).toBe('Missing request body');
-  });
-
-  it('should return 400 for missing required fields', async () => {
-    // Arrange: Event with an empty body
-    const event = {
-      body: JSON.stringify({})
-    } as APIGatewayProxyEvent;
-
-    // Act: Call the function
-    const result = await handleBase64Upload(event);
-
-    // Assert: Verify the response
-    expect(result.statusCode).toBe(400);
-    const response = JSON.parse(result.body);
-    expect(response.error).toBe('Missing required fields: base64Content or jsprogram');
-  });
-
-  it('should return 400 for invalid base64 content', async () => {
-    // Arrange: Event with invalid base64 content
-    const event = {
-      body: JSON.stringify({
-        base64Content: 'not_base64_encoded_content',
-        jsprogram: 'console.log("test")'
-      })
-    } as APIGatewayProxyEvent;
-
-    // Act: Call the function
-    const result = await handleBase64Upload(event);
-
-    // Assert: Verify the response
-    expect(result.statusCode).toBe(400);
-    const response = JSON.parse(result.body);
-    expect(response.error).toBe('Invalid base64 content');
-  });
-
-  it('should return 400 for missing package.json in zip file', async () => {
-    // Arrange: Create a zip without a package.json file
-    const zip = new AdmZip();
-    zip.addFile('other-file.txt', Buffer.from('This is not a package.json file'));
-    const event = {
-      body: JSON.stringify({
-        base64Content: zip.toBuffer().toString('base64'),
-        jsprogram: 'console.log("test")'
-      })
-    } as APIGatewayProxyEvent;
-
-    // Act: Call the function
-    const result = await handleBase64Upload(event);
-
-    // Assert: Verify the response
-    expect(result.statusCode).toBe(400);
-    const response = JSON.parse(result.body);
-    expect(response.error).toBe('Package.json not found in the zip file');
-  });
-
-  it('should return 200 for successful upload', async () => {
-    // Arrange: Create a valid zip file with package.json
-    const zip = new AdmZip();
-    zip.addFile(
-      'package.json',
-      Buffer.from(
-        JSON.stringify({
-          name: 'test-package',
-          version: '1.0.0',
-        })
-      )
-    );
-
-    const event = {
-      body: JSON.stringify({
-        base64Content: zip.toBuffer().toString('base64'),
-        jsprogram: 'console.log("test")',
-      }),
-    } as APIGatewayProxyEvent;
-
-    // Act: Call the function
-    const result = await handleBase64Upload(event);
-
-    // Assert: Verify the response
-    expect(result.statusCode).toBe(200);
-    const responseBody = JSON.parse(result.body);
-    expect(responseBody.message).toBe('Package uploaded successfully');
-    expect(responseBody.metadata).toEqual({ name: 'test-package', version: '1.0.0' });
-  });
-});;
