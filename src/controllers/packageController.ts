@@ -25,7 +25,7 @@ export interface PackageData {
 }
 
 //Function to generate a unique package id
-const generatePackageId = (name: string, version: string): string => {
+export const generatePackageId = (name: string, version: string): string => {
   return createHash('sha256').update(`${name}-${version}`).digest('hex');
 };
 
@@ -219,7 +219,7 @@ export const uploadURLZipToS3 = async (githubUrl: string): Promise<void> => {
   };
 };
 
-const packageExists = async (packageId: string): Promise<boolean> => {
+export const packageExists = async (packageId: string): Promise<boolean> => {
   try {
     console.log('Checking if package exists in S3 bucket');
     //Check if package already exists in S3 bucket
@@ -339,7 +339,7 @@ export const uploadPackage = async (requestBody: PackageData): Promise<APIGatewa
   }
 };
 
-const deletePackageFromS3 = async (packageId: string): Promise<void> => {
+export const deletePackageFromS3 = async (packageId: string): Promise<void> => {
   try {
     const command = new DeleteObjectCommand({
       Bucket: process.env.BUCKET_NAME,
@@ -354,7 +354,7 @@ const deletePackageFromS3 = async (packageId: string): Promise<void> => {
 };
 
 //Function to delete the scores row for specific package ID from dynamoDB
-const deleteScoresFromDynamoDB = async (packageId: string): Promise<void> => {
+export const deleteScoresFromDynamoDB = async (packageId: string): Promise<void> => {
   try {
     const command = new DeleteItemCommand({
       TableName: process.env.SCORES_TABLE_NAME,
@@ -375,7 +375,7 @@ const validateScore = (score: any): boolean => {
 };
 
 //Function to get the github url from the zip file
-const getGithubUrlFromZip = async (zip: AdmZip): Promise<string> => {
+export const getGithubUrlFromZip = async (zip: AdmZip): Promise<string> => {
   const zipEntries = zip.getEntries();
   let packageJsonEntry = zipEntries.find(entry => entry.entryName === 'package.json');
 
@@ -407,7 +407,7 @@ const getGithubUrlFromZip = async (zip: AdmZip): Promise<string> => {
 };
 
 //Function to check the package rating and return the rating as a json object
-const checkPackageRating = async (requestBody: PackageData): Promise<any> => {
+export const checkPackageRating = async (requestBody: PackageData): Promise<any> => {
   //if requestBody.URL is provided, check the rating of the package from the url else check from requestBody.Content
   try {
     if (requestBody.URL) {
@@ -447,7 +447,7 @@ const checkPackageRating = async (requestBody: PackageData): Promise<any> => {
 };
 
 //Function to upload package scores and S3 data to dynamoDB database
-const uploadPackageMetadataToDynamoDB = async (scores: any, packageId: string): Promise<void> => {
+export const uploadPackageMetadataToDynamoDB = async (scores: any, packageId: string): Promise<void> => {
   try {
     // Log the incoming scores object
     console.log('Raw scores object:', JSON.stringify(scores, null, 2));
@@ -485,7 +485,7 @@ const uploadPackageMetadataToDynamoDB = async (scores: any, packageId: string): 
 };
 
 //Function to upload package metadata to main table
-const uploadPackageMetadataToMainTable = async (packageId: string, name: string, version: string) => {
+export const uploadPackageMetadataToMainTable = async (packageId: string, name: string, version: string) => {
   try {
     const item = {
       PackageId: packageId,
@@ -507,3 +507,19 @@ const uploadPackageMetadataToMainTable = async (packageId: string, name: string,
     throw new Error('Error uploading package to main table');
   }
 }
+
+export const PackageController = {
+  uploadBase64ZipToS3,
+  getGithubUrlFromUrl,
+  checkPackageRating,
+  uploadPackage,
+  uploadURLZipToS3,
+  generatePackageId,
+  fetchPackageJson,
+  packageExists,
+  uploadPackageMetadataToDynamoDB,
+  uploadPackageMetadataToMainTable,
+  getZipFromGithubUrl,
+  deletePackageFromS3,
+  deleteScoresFromDynamoDB
+};
