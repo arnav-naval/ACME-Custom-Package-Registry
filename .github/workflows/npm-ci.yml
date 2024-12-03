@@ -3,7 +3,7 @@ name: CI/CD for lambda function
 on:
   push:
     branches:
-      - 'features/upload-package'
+      - 'feature/upload-package'
       - 'features/reset'
       - main
   pull_request:
@@ -15,10 +15,10 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
 
     - name: Set up Node.js
-      uses: actions/setup-node@v2
+      uses: actions/setup-node@v4
       with:
         node-version: '20'  # specify the Node.js version you need
 
@@ -27,6 +27,18 @@ jobs:
 
     - name: Build
       run: npm run build
+    
+    #- name: Lint
+    #  run: npm run lint
+    
+    # - name: Test
+    #   run: npm run test:single
+
+    - name: Rename uploadPackage handler file
+      run: mv dist/handlers/uploadPackageLambdaHandler.js dist/handlers/uploadPackageLambdaHandler.mjs
+
+    - name: Prepare for deployment
+      run: npm prune --production
 
     - name: Create deployment package
       run: |
@@ -36,7 +48,7 @@ jobs:
         zip -ur function.zip node_modules package.json
     
     - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v1
+      uses: aws-actions/configure-aws-credentials@v4
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}

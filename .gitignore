@@ -40,3 +40,6 @@ Thumbs.db
 # .env file
 .env
 
+# Test package for zip to S3
+test-package/
+test-package.zip

@@ -6,12 +6,9 @@
     "moduleResolution": "node",
     "sourceMap": true,
     "outDir": "dist",
-    "allowJs": true,
-    "baseUrl": "./src",               // Added for path resolution
-    "paths": {
-      "*": ["*", "../dist/*"]         // Allow mapping to dist directory
-    }
+    "allowJs": true
   },
-  "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "dist"] // Exclude unnecessary directories
+  "include": ["src/**/*.ts", "src/tests/**/*.ts", "src/tests/controllers/packageController.spec.ts"],
+  "lib": ["es2015"]
 }
+

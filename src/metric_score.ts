@@ -1,9 +1,3 @@
-import { info, debug, silent } from "./logger.js";
-import dotenv from "dotenv";
-
-// Load environment variables from .env file
-dotenv.config();
-
 //Declare file interface
 interface File {
   name: string;
@@ -32,6 +26,7 @@ const measureLatency = async (fn: () => Promise<any>, label: string) => {
 
 // takes as input URL and returns a score
 export async function netScore(url: string): Promise<any> {
+  const start = Date.now();
   let data, openIssues, closedIssues;
   // convert npm URL to GitHub URL
   if (url.includes("npmjs.com")) {
@@ -53,14 +48,14 @@ export async function netScore(url: string): Promise<any> {
       const repo: string = repoURL ? repoURL.repository.url : null;
 
       if (!repo) {
-        await info("No repository URL found in npm data");
+        console.info("No repository URL found in npm data");
         return JSON.stringify({ mainScore: -1 });
       }
 
       // Update to Github URL
       url = repo.replace("git+", "").replace(".git", "");
     } catch (err) {
-      await info("Error fetching npm data");
+      console.info("Error fetching npm data");
       throw new Error("Error fetching npm data");
     }
   }
@@ -69,8 +64,8 @@ export async function netScore(url: string): Promise<any> {
     data = await fetchGitHubData(url);
     [openIssues, closedIssues] = await fetchIssues(url);
   } catch (err) {
-    await info("Error fetching GitHub data");
-    throw new Error("Error fetching GitHub data");
+    console.info("Error fetching GitHub data");
+    throw new Error(`Error fetching GitHub data: ${err.message}`);
   }
 
   // structure for getting count (for bus factor) below
@@ -87,11 +82,11 @@ export async function netScore(url: string): Promise<any> {
         count = data.maintainers;
       }
     } catch (err) {
-      await info("Error fetching contributors/maintainers");
+      console.info("Error fetching contributors/maintainers");
       throw new Error("Error fetching contributors/maintainers");
     }
   } else {
-    await info("No contributor or maintainer data available");
+    console.info("No contributor or maintainer data available");
     throw new Error("No contributor or maintainer data available");
   }
 
@@ -111,11 +106,13 @@ export async function netScore(url: string): Promise<any> {
     ]);
 
   // store weights
-  let w_b: number = 0.2;
+  let w_b: number = 0.1;
   let w_c: number = 0.25;
   let w_r: number = 0.15;
   let w_rm: number = 0.3;
   let w_l: number = 0.1;
+  let w_pd: number = 0.05;
+  let w_pr: number = 0.05;
 
   // calculate score
   let netScore: number =
@@ -123,12 +120,13 @@ export async function netScore(url: string): Promise<any> {
     w_c * Correctness.score +
     w_r * RampUp.score +
     w_rm * ResponsiveMaintainer.score +
-    w_l * License.score;
-    //add in pinned dependencies score
-    //add in PR review score
+    w_l * License.score +
+    w_pd * PinnedDependencies.score +
+    w_pr * PRReview.score;
   
   netScore = parseFloat(netScore.toFixed(2));
 
+  const netScoreLatency = Date.now() - start;
   // construct result object, JSONify, then return
   const result = {
     NetScore: netScore,
@@ -136,20 +134,21 @@ export async function netScore(url: string): Promise<any> {
     Correctness: Correctness.score,
     BusFactor: BusFactor.score,
     ResponsiveMaintainer: ResponsiveMaintainer.score,
-    License: License.score,
-    PinnedDependencies: PinnedDependencies.score,
-    PRReview: PRReview.score,
-    RampUp_Latency: RampUp.latency,
-    Correctness_Latency: Correctness.latency,
-    BusFactor_Latency: BusFactor.latency,
-    ResponsiveMaintainer_Latency: ResponsiveMaintainer.latency,
-    License_Latency: License.latency,
-    PinnedDependencies_Latency: PinnedDependencies.latency,
-    PRReview_Latency: PRReview.latency,
+    LicenseScore: License.score,
+    GoodPinningPractice: PinnedDependencies.score,
+    PullRequest: PRReview.score,
+    RampUpLatency: RampUp.latency,
+    CorrectnessLatency: Correctness.latency,
+    BusFactorLatency: BusFactor.latency,
+    ResponsiveMaintainerLatency: ResponsiveMaintainer.latency,
+    LicenseScoreLatency: License.latency,
+    GoodPinningPracticeLatency: PinnedDependencies.latency,
+    PullRequestLatency: PRReview.latency,
+    NetScoreLatency: netScoreLatency,
   };
 
-  await info(`Processed URL: ${url}, Score: ${netScore}`);
-  await info(`Result: ${JSON.stringify(result)}`);
+  console.info(`Processed URL: ${url}, Score: ${netScore}`);
+  console.info(`Result: ${JSON.stringify(result)}`);
   return result;
 }
 
@@ -179,7 +178,7 @@ export async function busFactorScore(
 // and returns M_c,normalized(r) as specified in project plan
 export async function correctnessScore(IssueCount: number): Promise<number> {
   if (IssueCount === undefined || IssueCount === null) {
-    await info("Issue count is missing, returning correctness score of 0");
+    console.info("Issue count is missing, returning correctness score of 0");
     return 0; // No issue count present, return 0
   }
 
@@ -217,9 +216,9 @@ export async function pinnedDependenciesScore(repoUrl: string): Promise<number> 
     const files: File[] = await fetchRepoContents(repoUrl);
     const packageJson = files.find(file => file.name.toLowerCase() === 'package.json');
 
-    //If no package.json, return 0
+    //If no package.json, return 1
     if (!packageJson) {
-      return 0;
+      return parseFloat((1.00).toFixed(2));
     }
 
     //Fetch package.json
@@ -246,6 +245,11 @@ export async function pinnedDependenciesScore(repoUrl: string): Promise<number> 
     ]);
 
     let totalDependencies = allDependencies.size;
+
+    if (totalDependencies === 0) {
+      return parseFloat((1.00).toFixed(2));
+    }
+
     let pinnedDependencies = 0;
 
     //Check if dependencies are pinned
@@ -274,7 +278,7 @@ export async function pinnedDependenciesScore(repoUrl: string): Promise<number> 
     return parseFloat(score.toFixed(2));
   }
   catch (error) {
-    await info(`Error calculating pinned dependencies score: ${error.message}`);
+    console.info(`Error calculating pinned dependencies score: ${error.message}`);
     return 0; //Return 0 if there's an error
   }
 };
@@ -332,7 +336,7 @@ export async function pullRequestReviewScore(repoUrl: string): Promise<number> {
     const score = mergedPRs.length > 0 ? prsWithReviews / mergedPRs.length : 0;
     return parseFloat(score.toFixed(2));
   } catch (error) {
-    await info(`Error in pullRequestReviewScore: ${error.message}`);
+    console.info(`Error in pullRequestReviewScore: ${error.message}`);
     return 0;
   }
 }
@@ -416,7 +420,7 @@ export async function rampUpScore(repoUrl: string): Promise<number> {
 
     return normalizedScore;
   } catch (error) {
-    await info("Error fetching repository contents for ramp-up score");
+    console.info("Error fetching repository contents for ramp-up score");
     return 0; // Default to 0 if there's an error
   }
 }
