@@ -5,10 +5,9 @@
     "target": "es6",
     "moduleResolution": "node",
     "sourceMap": true,
-    "outDir": "dist",
+    "outDir": "./instrumented", // Update to match the expected folder
     "allowJs": true
   },
   "include": ["src/**/*.ts", "src/tests/**/*.ts"],
   "lib": ["es2015"]
 }
-

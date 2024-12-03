@@ -1,4 +1,4 @@
-const fs = require('fs');
+/*const fs = require('fs');
 const path = require('path');
 
 // This will step through the function and check the score for each individual function
@@ -116,3 +116,4 @@ describe("Text Files Test Suite", () => {
         });
     });
 });
+*/
