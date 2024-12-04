@@ -38,7 +38,7 @@ jobs:
       run: mv dist/handlers/uploadPackageLambdaHandler.js dist/handlers/uploadPackageLambdaHandler.mjs
     
     - name: Rename resetHandler file
-      run: mv dist/handlers/resetHandler.js dist/handlers/resetHandler.mjs
+      run: mv dist/handlers/resetLambdaHandler.js dist/handlers/resetLambdaHandler.mjs
 
     - name: Prepare for deployment
       run: npm prune --production
