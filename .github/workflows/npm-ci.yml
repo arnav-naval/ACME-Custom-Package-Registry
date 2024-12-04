@@ -36,6 +36,9 @@ jobs:
 
     - name: Rename uploadPackage handler file
       run: mv dist/handlers/uploadPackageLambdaHandler.js dist/handlers/uploadPackageLambdaHandler.mjs
+    
+    - name: Rename resetHandler file
+      run: mv dist/handlers/resetHandler.js dist/handlers/resetHandler.mjs
 
     - name: Prepare for deployment
       run: npm prune --production
@@ -57,5 +60,4 @@ jobs:
     - name: Deploy lambda function
       run: |
         aws lambda update-function-code --function-name arn:aws:lambda:us-east-2:412381743875:function:uploadPackage --zip-file fileb://function.zip
-    #- name: Run testing script
-    #  run: ./run test
+        aws lambda update-function-code --function-name arn:aws:lambda:us-east-2:412381743875:function:reset --zip-file fileb://function.zip

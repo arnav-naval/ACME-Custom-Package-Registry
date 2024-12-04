@@ -1,6 +1,5 @@
 import { uploadPackage } from '../controllers/packageController.js';
-import { APIGatewayProxyHandler, APIGatewayProxyEvent } from 'aws-lambda';
-import { Context } from 'aws-lambda';
+import { APIGatewayProxyHandler, APIGatewayProxyEvent, Context } from 'aws-lambda';
 import { PackageData } from '../controllers/packageController.js';
 
 //Function to process the request body of URL, Content, and JSProgram
