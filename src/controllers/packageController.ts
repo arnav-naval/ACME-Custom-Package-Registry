@@ -455,14 +455,23 @@ const uploadPackageMetadataToScoresTable= async (scores: any, packageId: string)
       id: packageId,
       timestamp: new Date().toISOString(),
       scores: {
-        netScore: scores.netScore,
+        NetScore: scores.NetScore,
         BusFactor: scores.BusFactor,
         Correctness: scores.Correctness,
         RampUp: scores.RampUp,
         ResponsiveMaintainer: scores.ResponsiveMaintainer,
-        License: scores.License,
-        PinnedDependencies: scores.PinnedDependencies,
-        PRReview: scores.PRReview,
+        LicenseScore: scores.LicenseScore,
+        GoodPinningPractice: scores.GoodPinningPractice,
+        PullRequest: scores.PullRequest,
+        // Include latency metrics
+        RampUpLatency: scores.RampUpLatency,
+        CorrectnessLatency: scores.CorrectnessLatency,
+        BusFactorLatency: scores.BusFactorLatency,
+        ResponsiveMaintainerLatency: scores.ResponsiveMaintainerLatency,
+        LicenseScoreLatency: scores.LicenseScoreLatency,
+        GoodPinningPracticeLatency: scores.GoodPinningPracticeLatency,
+        PullRequestLatency: scores.PullRequestLatency,
+        NetScoreLatency: scores.NetScoreLatency
       }
     };
 
