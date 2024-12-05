@@ -113,7 +113,7 @@ describe("Text Files Test Suite", () => {
                 const filteredOutput = filterLatency(ndjsonOutput);
                 expect(filteredOutput.toString()).toEqual(filteredTest.toString());
             }
-        });
+        });np
     });
 });
 */

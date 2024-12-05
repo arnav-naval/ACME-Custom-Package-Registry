@@ -1,10 +1,15 @@
+
+
 import { fetchPackageVersions } from '../controllers/fetchPackageVersionsController';
 import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
+
+console.log("bro");
 
 describe('fetchPackageVersions', () => {
   const mockDynamoDBClient = {
     send: jasmine.createSpy('send'),
   };
+
 
   beforeEach(() => {
     // Reset the mock behavior before each test
