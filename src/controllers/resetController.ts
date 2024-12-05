@@ -3,6 +3,10 @@ import { DynamoDBClient, ScanCommand, BatchWriteItemCommand } from '@aws-sdk/cli
 import { marshall } from '@aws-sdk/util-dynamodb';
 import { APIGatewayProxyResult } from 'aws-lambda';
 
+
+
+
+
 //initialize S3 client
 const s3 = new S3Client({
   region: process.env.AWS_REGION,
@@ -116,7 +120,7 @@ export const resetRegistry = async (): Promise<APIGatewayProxyResult> => {
 };
 
 //Delete all objects in the S3 bucket using versioned delete
-async function deleteAllS3Objects() {
+export async function deleteAllS3Objects() {
   try {
     let keyMarker: string | undefined;
     let versionIdMarker: string | undefined;
