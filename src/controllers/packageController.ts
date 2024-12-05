@@ -439,7 +439,7 @@ const checkPackageRating = async (requestBody: PackageData): Promise<any> => {
   } catch (error) {
     console.error('Error checking package rating:', error);
     return {
-      statusCode: 424,
+      statusCode: 400,
       body: JSON.stringify({ error: 'Error checking package rating, package could not be uploaded' })
     };
   }
