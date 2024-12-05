@@ -496,7 +496,7 @@ const uploadPackageMetadataToScoresTable= async (scores: any, packageId: string)
 const uploadPackageMetadataToMainTable = async (packageId: string, name: string, version: string, requestBody: PackageData) => {
   try {
     const item = {
-      PackageId: packageId,
+      PackageID: packageId,
       Name: name,
       Version: version,
       timestamp: new Date().toISOString(),
