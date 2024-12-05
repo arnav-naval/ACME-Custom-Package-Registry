@@ -298,7 +298,7 @@ export const uploadPackage = async (requestBody: PackageData): Promise<APIGatewa
 
     //Since we havent exited, save package scores to dynamoDb
     try {
-      await uploadPackageMetadataToDynamoDB(packageRatingScore, packageId);
+      await uploadPackageMetadataToScoresTable(packageRatingScore, packageId);
     } catch (error) {
       //delete package from S3 bucket
       await deletePackageFromS3(packageId);
@@ -310,7 +310,7 @@ export const uploadPackage = async (requestBody: PackageData): Promise<APIGatewa
 
     //Upload package metadata to main table
     try {
-      await uploadPackageMetadataToMainTable(packageId, name, version);
+      await uploadPackageMetadataToMainTable(packageId, name, version, requestBody);
     } catch (error) {
       //delete package from S3 bucket
       await deletePackageFromS3(packageId);
@@ -406,7 +406,6 @@ const getGithubUrlFromZip = async (zip: AdmZip): Promise<string> => {
     .replace(".git", "");
 };
 
-//Function to check the package rating and return the rating as a json object
 const checkPackageRating = async (requestBody: PackageData): Promise<any> => {
   //if requestBody.URL is provided, check the rating of the package from the url else check from requestBody.Content
   try {
@@ -447,7 +446,7 @@ const checkPackageRating = async (requestBody: PackageData): Promise<any> => {
 };
 
 //Function to upload package scores and S3 data to dynamoDB database
-const uploadPackageMetadataToDynamoDB = async (scores: any, packageId: string): Promise<void> => {
+const uploadPackageMetadataToScoresTable= async (scores: any, packageId: string): Promise<void> => {
   try {
     // Log the incoming scores object
     console.log('Raw scores object:', JSON.stringify(scores, null, 2));
@@ -485,13 +484,16 @@ const uploadPackageMetadataToDynamoDB = async (scores: any, packageId: string): 
 };
 
 //Function to upload package metadata to main table
-const uploadPackageMetadataToMainTable = async (packageId: string, name: string, version: string) => {
+const uploadPackageMetadataToMainTable = async (packageId: string, name: string, version: string, requestBody: PackageData) => {
   try {
     const item = {
       PackageId: packageId,
-      name: name,
-      version: version,
+      Name: name,
+      Version: version,
       timestamp: new Date().toISOString(),
+      Content: requestBody.Content || null,
+      URL: requestBody.URL || null,
+      JSProgram: requestBody.JSProgram || null,
     }
 
     const params = {

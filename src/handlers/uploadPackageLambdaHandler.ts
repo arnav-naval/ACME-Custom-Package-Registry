@@ -32,7 +32,7 @@ export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEven
     if (!event.body) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: 'Missing request body' }),
+        body: JSON.stringify({ error: 'There is missing field(s) in the PackageID or it is formed improperly, or is invalid.' }),
       };
     }
 
@@ -50,7 +50,7 @@ export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEven
       return {
         statusCode: 400,
         body: JSON.stringify({ 
-          error: 'Invalid JSON in request body',
+          error: 'There is missing field(s) in the PackageID or it is formed improperly, or is invalid.',
         }),
       };
     }
