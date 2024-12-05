@@ -5,6 +5,7 @@ on:
     branches:
       - 'feature/upload-package'
       - 'feature/reset'
+      - 'feature/getPackage'
       - main
   pull_request:
     branches: [ main ]
@@ -40,6 +41,9 @@ jobs:
     - name: Rename resetHandler file
       run: mv dist/handlers/resetLambdaHandler.js dist/handlers/resetLambdaHandler.mjs
 
+    - name: Rename getPackageHandler file
+      run: mv dist/handlers/getPackageLambdaHandler.js dist/handlers/getPackageLambdaHandler.mjs
+
     - name: Prepare for deployment
       run: npm prune --production
 
@@ -61,3 +65,4 @@ jobs:
       run: |
         aws lambda update-function-code --function-name arn:aws:lambda:us-east-2:412381743875:function:uploadPackage --zip-file fileb://function.zip
         aws lambda update-function-code --function-name arn:aws:lambda:us-east-2:412381743875:function:reset --zip-file fileb://function.zip
+        aws lambda update-function-code --function-name arn:aws:lambda:us-east-2:412381743875:function:getPackage --zip-file fileb://function.zip
