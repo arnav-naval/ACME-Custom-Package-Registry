@@ -1,5 +1,5 @@
 import { APIGatewayProxyHandler, APIGatewayProxyEvent, Context } from 'aws-lambda';
-import { getRating } from '../controllers/getRatingController.js';
+import { getPackageRating } from '../controllers/getRatingController.js';
 
 //Validate id with regex pattern
 export const validateId = (id: string): boolean => {
@@ -25,7 +25,7 @@ export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEven
       };
     }
 
-    return await getRating(packageId);
+    return await getPackageRating(packageId);
 
   } catch (error) {
     console.error('Error in getRating handler:', error);
