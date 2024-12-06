@@ -371,7 +371,7 @@ const deleteScoresFromDynamoDB = async (packageId: string): Promise<void> => {
 //Function to validate the score and ensure all scores are above 0.5
 const validateScore = (score: any): boolean => {
   const lim = 0;
-  return score.BusFactor >= lim && score.Correctness >= lim && score.RampUp >= lim && score.ResponsiveMaintainer >= lim && score.License >= lim && score.PinnedDependencies >= lim && score.PRReview >= lim;
+  return score.BusFactor >= lim && score.Correctness >= lim && score.RampUp >= lim && score.ResponsiveMaintainer >= lim && score.LicenseScore >= lim && score.GoodPinningPractice >= lim && score.PullRequest >= lim;
 };
 
 //Function to get the github url from the zip file
@@ -455,14 +455,14 @@ const uploadPackageMetadataToScoresTable= async (scores: any, packageId: string)
       id: packageId,
       timestamp: new Date().toISOString(),
       scores: {
-        netScore: scores.netScore,
+        NetScore: scores.NetScore,
         BusFactor: scores.BusFactor,
         Correctness: scores.Correctness,
         RampUp: scores.RampUp,
         ResponsiveMaintainer: scores.ResponsiveMaintainer,
-        License: scores.License,
-        PinnedDependencies: scores.PinnedDependencies,
-        PRReview: scores.PRReview,
+        LicenseScore: scores.LicenseScore,
+        GoodPinningPractice: scores.GoodPinningPractice,
+        PullRequest: scores.PullRequest,
       }
     };
 
@@ -487,11 +487,10 @@ const uploadPackageMetadataToScoresTable= async (scores: any, packageId: string)
 const uploadPackageMetadataToMainTable = async (packageId: string, name: string, version: string, requestBody: PackageData) => {
   try {
     const item = {
-      PackageId: packageId,
+      PackageID: packageId,
       Name: name,
       Version: version,
       timestamp: new Date().toISOString(),
-      Content: requestBody.Content || null,
       URL: requestBody.URL || null,
       JSProgram: requestBody.JSProgram || null,
     }
