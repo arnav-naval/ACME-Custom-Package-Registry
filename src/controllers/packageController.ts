@@ -310,7 +310,8 @@ export const uploadPackage = async (requestBody: PackageData): Promise<APIGatewa
 
     //Upload package metadata to main table
     try {
-      await uploadPackageMetadataToMainTable(packageId, name, version, requestBody);
+      const readmeContent = extractReadmeContent(zip);
+      await uploadPackageMetadataToMainTable(packageId, name, version, readmeContent, requestBody);
     } catch (error) {
       //delete package from S3 bucket
       await deletePackageFromS3(packageId);
@@ -484,7 +485,7 @@ const uploadPackageMetadataToScoresTable= async (scores: any, packageId: string)
 };
 
 //Function to upload package metadata to main table
-const uploadPackageMetadataToMainTable = async (packageId: string, name: string, version: string, requestBody: PackageData) => {
+const uploadPackageMetadataToMainTable = async (packageId: string, name: string, version: string, readmeContent: string, requestBody: PackageData) => {
   try {
     const item = {
       PackageID: packageId,
@@ -493,6 +494,7 @@ const uploadPackageMetadataToMainTable = async (packageId: string, name: string,
       timestamp: new Date().toISOString(),
       URL: requestBody.URL || null,
       JSProgram: requestBody.JSProgram || null,
+      ReadMe: readmeContent,
     }
 
     const params = {
@@ -508,3 +510,31 @@ const uploadPackageMetadataToMainTable = async (packageId: string, name: string,
     throw new Error('Error uploading package to main table');
   }
 }
+
+//Function to get the readme content from the zip file
+export const extractReadmeContent = (zip: AdmZip): string => {
+  //Max length (under 400kb for dynamodb storage)
+  const MAX_README_LENGTH = 360000;
+  const zipEntries = zip.getEntries();
+
+  // Ordered patterns from highest to lowest priority
+  const readmePatterns = [
+    /^README\.md$/i,      // 1. Root README.md
+    /^README$/i,          // 2. Root README
+    /^README\.txt$/i,     // 3. Root README.txt
+    /.*\/README\.md$/i,   // 4. Nested README.md
+    /.*\/README$/i,       // 5. Nested README
+    /.*\/README\.txt$/i   // 6. Nested README.txt
+  ];
+
+  // Check patterns in priority order
+  for (const pattern of readmePatterns) {
+    const readmeEntry = zipEntries.find(entry => pattern.test(entry.entryName));
+    if (readmeEntry) {
+      const content = readmeEntry.getData().toString('utf8');
+      return content.slice(0, MAX_README_LENGTH);
+    }
+  }
+
+  return '';
+};
