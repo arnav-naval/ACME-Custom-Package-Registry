@@ -6,6 +6,7 @@ on:
       - 'feature/upload-package'
       - 'feature/reset'
       - 'feature/getPackage'
+      - 'feature/getRating'
       - main
   pull_request:
     branches: [ main ]
