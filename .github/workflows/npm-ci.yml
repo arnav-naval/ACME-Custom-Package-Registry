@@ -3,7 +3,10 @@ name: CI/CD for lambda function
 on:
   push:
     branches:
-      - 'features/upload-package'
+      - 'feature/upload-package'
+      - 'feature/reset'
+      - 'feature/getPackage'
+      - 'feature/getRating'
       - main
   pull_request:
     branches: [ main ]
@@ -14,10 +17,10 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
 
     - name: Set up Node.js
-      uses: actions/setup-node@v2
+      uses: actions/setup-node@v4
       with:
         node-version: '20'  # specify the Node.js version you need
 
@@ -26,6 +29,27 @@ jobs:
 
     - name: Build
       run: npm run build
+    
+    #- name: Lint
+    #  run: npm run lint
+    
+    # - name: Test
+    #   run: npm run test:single
+
+    - name: Rename uploadPackage handler file
+      run: mv dist/handlers/uploadPackageLambdaHandler.js dist/handlers/uploadPackageLambdaHandler.mjs
+    
+    - name: Rename resetHandler file
+      run: mv dist/handlers/resetLambdaHandler.js dist/handlers/resetLambdaHandler.mjs
+
+    - name: Rename getPackageHandler file
+      run: mv dist/handlers/getPackageLambdaHandler.js dist/handlers/getPackageLambdaHandler.mjs
+
+    - name: Rename getRatingHandler file
+      run: mv dist/handlers/getRatingLambdaHandler.js dist/handlers/getRatingLambdaHandler.mjs
+
+    - name: Prepare for deployment
+      run: npm prune --production
 
     - name: Create deployment package
       run: |
@@ -35,7 +59,7 @@ jobs:
         zip -ur function.zip node_modules package.json
     
     - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v1
+      uses: aws-actions/configure-aws-credentials@v4
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -43,6 +67,7 @@ jobs:
     
     - name: Deploy lambda function
       run: |
-        aws lambda update-function-code --function-name arn:aws:lambda:us-east-2:412381743875:function:uploadPackage --zip-file fileb://function.zip
-    #- name: Run testing script
-    #  run: ./run test
+        #aws lambda update-function-code --function-name arn:aws:lambda:us-east-2:412381743875:function:uploadPackage --zip-file fileb://function.zip
+        #aws lambda update-function-code --function-name arn:aws:lambda:us-east-2:412381743875:function:reset --zip-file fileb://function.zip
+        #aws lambda update-function-code --function-name arn:aws:lambda:us-east-2:412381743875:function:getPackage --zip-file fileb://function.zip
+        aws lambda update-function-code --function-name arn:aws:lambda:us-east-2:412381743875:function:getRating --zip-file fileb://function.zip
