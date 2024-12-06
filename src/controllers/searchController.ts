@@ -20,7 +20,8 @@ export const searchPackages = async (event: APIGatewayProxyEvent): Promise<APIGa
       };
     }
 
-    const { RegEx } = JSON.parse(event.body);
+    const body = JSON.parse(event.body);
+    const { RegEx } = body.RegEx;
     if (!RegEx) {
       return {
         statusCode: 400,
@@ -41,13 +42,13 @@ export const searchPackages = async (event: APIGatewayProxyEvent): Promise<APIGa
 
     const params = {
       TableName: TABLE_NAME,
-      ProjectionExpression: "PackageName, Version, README",
+      ProjectionExpression: "Name, Version, PackageID, ReadMe",
     };
     const result = await dynamoDBDocClient.send(new ScanCommand(params));
     const matchedPackages = (result.Items || []).filter(pkg =>
-      regexPattern.test(pkg.PackageName) || (pkg.README && regexPattern.test(pkg.README))
+      regexPattern.test(pkg.Name) || (pkg.ReadMe && regexPattern.test(pkg.ReadMe))
     );
-    // clarity
+    
     if (matchedPackages.length === 0) {
       return {
         statusCode: 404,
@@ -56,8 +57,9 @@ export const searchPackages = async (event: APIGatewayProxyEvent): Promise<APIGa
     }
 
     const response = matchedPackages.map(pkg => ({
-      Name: pkg.PackageName,
+      Name: pkg.Name,
       Version: pkg.Version,
+      ID: pkg.PackageID,
     }));
 
     return {
