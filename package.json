@@ -10,7 +10,7 @@
     "clean": "rm -rf dist",
     "build": "tsc",
     "test": "tsc && nyc instrument ./dist ./instrumented && jasmine --verbose",
-    "test:single": "tsc && jasmine dist/tests/controllers/packageController.spec.js",
+    "test:single": "tsc && jasmine dist/tests/controllers/getRating.spec.js",
     "coverage": "tsc && nyc instrument ./dist ./instrumented && nyc jasmine --verbose"
   },
   "keywords": [],
@@ -21,6 +21,7 @@
     "@types/express": "^4.17.1",
     "@types/jasmine": "^5.1.4",
     "@types/node": "^22.5.5",
+    "aws-sdk-client-mock": "^4.1.0",
     "eslint": "^9.10.0",
     "globals": "^15.9.0",
     "jasmine": "^5.3.0",
