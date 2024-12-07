@@ -23,6 +23,7 @@ jobs:
         node -e "
           const pkg = require('./package.json');
           const newPkg = {
+            type: 'module',
             dependencies: {
               'adm-zip': pkg.dependencies['adm-zip'],
               'dotenv': pkg.dependencies['dotenv'],
@@ -38,14 +39,6 @@ jobs:
         npm install --production
         
         # Remove unnecessary files
-        rm -rf node_modules/**/*.md
-        rm -rf node_modules/**/*.txt
-        rm -rf node_modules/**/LICENSE
-        rm -rf node_modules/**/*.map
-        rm -rf node_modules/**/test
-        rm -rf node_modules/**/tests
-        rm -rf node_modules/**/docs
-        cd ..
         
         # Create the layer zip
         zip -r layer.zip nodejs

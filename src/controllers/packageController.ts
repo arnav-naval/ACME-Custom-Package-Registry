@@ -15,7 +15,7 @@ const s3 = new S3Client({
 //initialize dynamoDB client
 const dynamoDb = new DynamoDBClient({
   region: process.env.AWS_REGION,
-})
+});
 
 //Interface for the request body of PackageData
 export interface PackageData {
