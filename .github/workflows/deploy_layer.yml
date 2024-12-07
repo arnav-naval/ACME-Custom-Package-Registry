@@ -26,7 +26,8 @@ jobs:
             dependencies: {
               'adm-zip': pkg.dependencies['adm-zip'],
               'dotenv': pkg.dependencies['dotenv'],
-              'fs-extra': pkg.dependencies['fs-extra']
+              'fs-extra': pkg.dependencies['fs-extra'],
+              'semver': pkg.dependencies['semver']
             }
           };
           require('fs').writeFileSync('nodejs/package.json', JSON.stringify(newPkg, null, 2));
