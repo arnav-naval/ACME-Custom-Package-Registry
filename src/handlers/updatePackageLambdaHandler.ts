@@ -78,7 +78,7 @@ export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEven
     // Convert GitHub URLs if present
     if (hasURL) {
       try {
-        data.URL = getGithubUrlFromUrl(data.URL);
+        data.URL = await getGithubUrlFromUrl(data.URL);
       } catch (error) {
         return {
           statusCode: 400,
