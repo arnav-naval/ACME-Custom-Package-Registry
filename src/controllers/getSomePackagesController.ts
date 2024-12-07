@@ -38,6 +38,13 @@ interface GetPackagesOptions {
   pageSize?: number;
 }
 
+// Update the response format to match spec exactly
+interface PackageMetadataResponse {
+  Version: string;
+  Name: string;
+  ID: string;
+}
+
 //Function that gets packages based on query criteria with pagination
 export const getPackages = async (options: GetPackagesOptions): Promise<APIGatewayProxyResult> => {
   const { queries, offset, pageSize = 10 } = options;
@@ -71,7 +78,7 @@ export const getPackages = async (options: GetPackagesOptions): Promise<APIGatew
         statusCode: 200,
         body: JSON.stringify(packages),
         headers: {
-          offset: (startIndex + packages.length).toString()
+          'offset': (startIndex + packages.length).toString()
         }
       };
     }
@@ -100,13 +107,17 @@ export const getPackages = async (options: GetPackagesOptions): Promise<APIGatew
     // Remove duplicates if any
     const uniquePackages = Array.from(
       new Map(packages.map(p => [`${p.Name}-${p.Version}`, p])).values()
-    );
+    ).map(p => ({
+      Version: p.Version,
+      Name: p.Name,
+      ID: p.ID
+    } as PackageMetadataResponse));
 
     return {
       statusCode: 200,
       body: JSON.stringify(uniquePackages),
       headers: {
-        offset: (startIndex + uniquePackages.length).toString()
+        'offset': (startIndex + uniquePackages.length).toString()
       }
     };
 

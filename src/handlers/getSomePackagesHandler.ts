@@ -10,13 +10,25 @@ export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEven
     const queries = event.body ? JSON.parse(event.body) : null;
     
     // Validate request body
-    if (!Array.isArray(queries)) {
+    if (!Array.isArray(queries) || queries.length === 0) {
       return {
         statusCode: 400,
         body: JSON.stringify({ 
-          error: 'Request body must be an array of package queries' 
+          error: 'Request body must be a non-empty array of package queries' 
         })
       };
+    }
+
+    // Validate each query object structure
+    for (const query of queries) {
+      if (!query.Name || typeof query.Name !== 'string') {
+        return {
+          statusCode: 400,
+          body: JSON.stringify({ 
+            error: 'Each query must have a Name property of type string' 
+          })
+        };
+      }
     }
 
     // Get offset from query parameters
