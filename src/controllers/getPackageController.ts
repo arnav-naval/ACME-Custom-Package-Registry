@@ -59,7 +59,7 @@ export const getPackageFromMainTable = async (packageId: string): Promise<Packag
   try {
     const params = {
       TableName: process.env.PACKAGES_TABLE_NAME,
-      Key: marshall({ PackageId: packageId }),
+      Key: marshall({ PackageID: packageId }),
     };
 
     const result = await dynamoDb.send(new GetItemCommand(params));
@@ -75,7 +75,7 @@ export const getPackageFromMainTable = async (packageId: string): Promise<Packag
       metadata: {
         Name: item.Name,
         Version: item.Version,
-        ID: item.PackageId,
+        ID: item.PackageID,
       },
       data: {
         JSProgram: item.JSProgram,

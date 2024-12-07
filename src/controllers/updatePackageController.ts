@@ -9,7 +9,7 @@ import { getPackageFromMainTable } from './getPackageController.js';
 const dynamoDb = new DynamoDBClient({ region: process.env.AWS_REGION });
 const s3 = new S3Client({ region: process.env.AWS_REGION });
 
-interface PackageResponse {
+export interface PackageResponse {
     metadata: {
       Name: string;
       Version: string;
