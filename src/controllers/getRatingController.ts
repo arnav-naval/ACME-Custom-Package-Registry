@@ -17,6 +17,14 @@ interface PackageRating {
     GoodPinningPractice: number;
     PullRequest: number;
     NetScore: number;
+    RampUpLatency: number;
+    CorrectnessLatency: number;
+    BusFactorLatency: number;
+    ResponsiveMaintainerLatency: number;
+    LicenseScoreLatency: number;
+    GoodPinningPracticeLatency: number;
+    PullRequestLatency: number;
+    NetScoreLatency: number;
 };
 
 // Function to get package rating from scores table
@@ -45,19 +53,29 @@ export const getPackageRating = async (packageId: string): Promise<APIGatewayPro
       // Format the response according to the PackageRating schema
       const rating: PackageRating = {
         BusFactor: item.scores.BusFactor,
+        BusFactorLatency: item.scores.BusFactorLatency,
         Correctness: item.scores.Correctness,
+        CorrectnessLatency: item.scores.CorrectnessLatency,
         RampUp: item.scores.RampUp,
+        RampUpLatency: item.scores.RampUpLatency,
         ResponsiveMaintainer: item.scores.ResponsiveMaintainer,
+        ResponsiveMaintainerLatency: item.scores.ResponsiveMaintainerLatency,
         LicenseScore: item.scores.LicenseScore,
+        LicenseScoreLatency: item.scores.LicenseScoreLatency,
         GoodPinningPractice: item.scores.GoodPinningPractice,
+        GoodPinningPracticeLatency: item.scores.GoodPinningPracticeLatency,
         PullRequest: item.scores.PullRequest,
+        PullRequestLatency: item.scores.PullRequestLatency,
         NetScore: item.scores.NetScore,
+        NetScoreLatency: item.scores.NetScoreLatency,
       };
   
       // Validate all required fields are present, if not set to -1
       const requiredFields = [
         'NetScore', 'BusFactor', 'Correctness', 'RampUp',
-        'ResponsiveMaintainer', 'LicenseScore', 'GoodPinningPractice', 'PullRequest'
+        'ResponsiveMaintainer', 'LicenseScore', 'GoodPinningPractice', 'PullRequest', 
+        'RampUpLatency', 'CorrectnessLatency', 'BusFactorLatency', 'ResponsiveMaintainerLatency',
+        'LicenseScoreLatency', 'GoodPinningPracticeLatency', 'PullRequestLatency', 'NetScoreLatency'
       ];
   
       for (const field of requiredFields) {
