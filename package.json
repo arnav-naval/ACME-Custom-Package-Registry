@@ -10,7 +10,7 @@
     "clean": "rm -rf dist",
     "build": "tsc",
     "test": "tsc && nyc instrument ./dist ./instrumented && jasmine --verbose",
-    "test:single": "tsc && jasmine dist/tests/controllers/getRating.spec.js",
+    "test:single": "tsc && jasmine dist/tests/controllers/updatePackageController.spec.js",
     "coverage": "tsc && nyc instrument ./dist ./instrumented && nyc jasmine --verbose"
   },
   "keywords": [],
