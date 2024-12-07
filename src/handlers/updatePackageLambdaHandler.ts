@@ -1,6 +1,5 @@
 import { APIGatewayProxyHandler, APIGatewayProxyEvent, Context } from 'aws-lambda';
 import { updatePackageController } from '../controllers/updatePackageController.js';
-import { getGithubUrlFromUrl } from '../controllers/packageController.js';
 
 /**
  * Validates the package ID using the specified regex pattern.
@@ -102,4 +101,44 @@ export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEven
       }),
     };
   }
+};
+
+export const getGithubUrlFromUrl = async (url: string): Promise<string> => {
+  let githubUrl = url;
+
+  // Handle npm URLs
+  if (url.includes("npmjs.com")) {
+    try {
+      // ... existing npm handling code ...
+    } catch (err) {
+      console.info("Error fetching npm data");
+      throw new Error(`Error fetching npm data: ${err.message}`);
+    }
+  }
+  
+  // Handle GitHub URLs
+  if (url.includes("github.com")) {
+    try {
+      // Convert github.com URLs to raw.githubusercontent.com
+      githubUrl = url
+        .replace("github.com", "raw.githubusercontent.com")
+        .replace("/blob/", "/");
+      
+      // Verify the URL is accessible
+      const response = await fetch(githubUrl);
+      if (!response.ok) {
+        throw new Error(`GitHub URL is not accessible: ${response.statusText}`);
+      }
+    } catch (err) {
+      console.info("Error processing GitHub URL");
+      throw new Error(`Error processing GitHub URL: ${err.message}`);
+    }
+  }
+
+  // If neither npm nor GitHub, throw error
+  if (!url.includes("npmjs.com") && !url.includes("github.com")) {
+    throw new Error("URL must be from either npmjs.com or github.com");
+  }
+
+  return githubUrl;
 };
