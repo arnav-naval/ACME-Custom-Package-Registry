@@ -16,42 +16,42 @@ jobs:
 
     - name: Create Layer
       run: |
-        # Debug original dependencies
-        echo "Original package.json:"
-        cat package.json
-        
-        # Create the nodejs directory structure
+        # Start fresh
+        rm -rf nodejs layer.zip
         mkdir -p nodejs
         
-        # Create a minimal package.json with only required dependencies
+        # Create a minimal package.json with only required dependencies from main package.json
         node -e "
           const pkg = require('./package.json');
           const newPkg = {
             type: 'module',
             dependencies: {
               'adm-zip': pkg.dependencies['adm-zip'],
-              'dotenv': pkg.dependencies['dotenv'],
-              'fs-extra': pkg.dependencies['fs-extra'],
               'semver': pkg.dependencies['semver']
             }
           };
+          console.log('Creating layer package.json with these dependencies:', newPkg.dependencies);
           require('fs').writeFileSync('nodejs/package.json', JSON.stringify(newPkg, null, 2));
         "
         
-        # Show the new package.json
-        echo "Layer package.json:"
+        # Show what we're including
+        echo "\nLayer package.json contents:"
         cat nodejs/package.json
         
-        # Install dependencies
+        # Install only the specified dependencies
         cd nodejs
         npm install --omit=dev
         
-        # Debug size before zipping
-        echo "Layer size:"
-        du -sh .
+        # Debug sizes
+        echo "\nSize of node_modules:"
+        du -sh node_modules/*
         
+        # Create minimal zip
         cd ..
         zip -r layer.zip nodejs
+        
+        # Show final zip size
+        ls -lh layer.zip
 
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
