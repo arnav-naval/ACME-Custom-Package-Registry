@@ -1,4 +1,5 @@
-import { uploadPackage } from '../controllers/packageController.js';
+import packageController from '../controllers/packageController.js';
+const { uploadPackage } = packageController;
 import { APIGatewayProxyHandler, APIGatewayProxyEvent, Context } from 'aws-lambda';
 import { PackageData } from '../controllers/packageController.js';
 
