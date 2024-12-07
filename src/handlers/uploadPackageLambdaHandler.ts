@@ -1,7 +1,5 @@
-import packageController from '../controllers/packageController.js';
-const { uploadPackage } = packageController;
+import { uploadPackage, PackageData} from '../controllers/packageController.js';
 import { APIGatewayProxyHandler, APIGatewayProxyEvent, Context } from 'aws-lambda';
-import { PackageData } from '../controllers/packageController.js';
 
 //Function to process the request body of URL, Content, and JSProgram
 const validateRequestBody = (body: PackageData): { isValid: boolean, error?: string } => {

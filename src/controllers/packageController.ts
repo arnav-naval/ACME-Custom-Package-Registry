@@ -538,5 +538,3 @@ export const extractReadmeContent = (zip: AdmZip): string => {
 
   return '';
 };
-
-export default { uploadPackage };
