@@ -49,6 +49,9 @@ jobs:
     - name: Rename getRatingHandler file
       run: mv dist/handlers/getRatingLambdaHandler.js dist/handlers/getRatingLambdaHandler.mjs
 
+    - name: Rename searchPackagesHandler file
+      run: mv dist/handlers/searchPackagesHandler.js dist/handlers/searchPackagesHandler.mjs
+
     - name: Prepare for deployment
       run: npm prune --production
 
@@ -75,6 +78,7 @@ jobs:
     - name: Deploy lambda function
       run: |
         aws lambda update-function-code --function-name arn:aws:lambda:us-east-2:412381743875:function:uploadPackage --zip-file fileb://function.zip
-        #aws lambda update-function-code --function-name arn:aws:lambda:us-east-2:412381743875:function:reset --zip-file fileb://function.zip
-        #aws lambda update-function-code --function-name arn:aws:lambda:us-east-2:412381743875:function:getPackage --zip-file fileb://function.zip
-        #aws lambda update-function-code --function-name arn:aws:lambda:us-east-2:412381743875:function:getRating --zip-file fileb://function.zip
+        aws lambda update-function-code --function-name arn:aws:lambda:us-east-2:412381743875:function:reset --zip-file fileb://function.zip
+        aws lambda update-function-code --function-name arn:aws:lambda:us-east-2:412381743875:function:getPackage --zip-file fileb://function.zip
+        aws lambda update-function-code --function-name arn:aws:lambda:us-east-2:412381743875:function:getRating --zip-file fileb://function.zip
+        aws lambda update-function-code --function-name arn:aws:lambda:us-east-2:412381743875:function:searchPackages --zip-file fileb://function.zip
