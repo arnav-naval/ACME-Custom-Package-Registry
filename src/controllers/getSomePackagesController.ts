@@ -1,4 +1,4 @@
-import { DynamoDBClient, GetItemCommand, ScanCommand, QueryCommand } from '@aws-sdk/client-dynamodb';
+import { DynamoDBClient, ScanCommand, QueryCommand } from '@aws-sdk/client-dynamodb';
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
 import { APIGatewayProxyResult } from 'aws-lambda';
 import semver from 'semver';
@@ -32,8 +32,16 @@ interface PackageQuery {
   Version?: string;
 }
 
+interface GetPackagesOptions {
+  queries: PackageQuery[];
+  offset?: string;
+  pageSize?: number;
+}
+
 //Function that gets packages based on query criteria with pagination
-export const getPackages = async (queries: PackageQuery[], offset?: string): Promise<APIGatewayProxyResult> => {
+export const getPackages = async (options: GetPackagesOptions): Promise<APIGatewayProxyResult> => {
+  const { queries, offset, pageSize = 10 } = options;
+
   try {
     // Validate queries
     if (!Array.isArray(queries) || queries.length === 0) {
@@ -43,7 +51,6 @@ export const getPackages = async (queries: PackageQuery[], offset?: string): Pro
       };
     }
 
-    const pageSize = 10;
     const startIndex = offset ? parseInt(offset, 10) : 0;
     
     if (isNaN(startIndex) || startIndex < 0) {
@@ -55,39 +62,22 @@ export const getPackages = async (queries: PackageQuery[], offset?: string): Pro
 
     let packages: PackageMetadata[] = [];
     
-    // Modify the response format to match API spec
-    const formatResponse = (packages: PackageMetadata[]) => {
-      return packages.map(p => ({
-        Version: p.Version,
-        Name: p.Name,
-        ID: p.ID
-      }));
-    };
-
-    // Handle get all packages case
+    // Handle enumerate all packages case
     if (queries.length === 1 && queries[0].Name === '*') {
-      const allPackages = await getAllPackages(startIndex, pageSize);
+      const result = await getAllPackages(startIndex, pageSize);
+      packages = result.items.map(p => p.metadata);
       
-      // Check for too many results
-      if (allPackages.packages.length > MAX_RESULTS) {
-        return {
-          statusCode: 413,
-          body: JSON.stringify({ error: 'Too many packages returned' })
-        };
-      }
-
       return {
         statusCode: 200,
-        body: JSON.stringify(formatResponse(allPackages.packages.map(p => p.metadata))),
+        body: JSON.stringify(packages),
         headers: {
-          offset: allPackages.nextOffset?.toString() || ''
+          offset: (startIndex + packages.length).toString()
         }
       };
     }
 
     // Handle specific package queries
     for (const query of queries) {
-      // Validate query format
       if (!isValidPackageQuery(query)) {
         return {
           statusCode: 400,
@@ -95,8 +85,8 @@ export const getPackages = async (queries: PackageQuery[], offset?: string): Pro
         };
       }
 
-      const matchingPackages = await queryPackages(query, startIndex, pageSize);
-      packages.push(...matchingPackages.items.map(p => p.metadata));
+      const result = await queryPackages(query, startIndex, pageSize);
+      packages.push(...result.items.map(p => p.metadata));
     }
 
     // Check for too many results
@@ -107,11 +97,16 @@ export const getPackages = async (queries: PackageQuery[], offset?: string): Pro
       };
     }
 
+    // Remove duplicates if any
+    const uniquePackages = Array.from(
+      new Map(packages.map(p => [`${p.Name}-${p.Version}`, p])).values()
+    );
+
     return {
       statusCode: 200,
-      body: JSON.stringify(formatResponse(packages)),
+      body: JSON.stringify(uniquePackages),
       headers: {
-        offset: (startIndex + pageSize).toString()
+        offset: (startIndex + uniquePackages.length).toString()
       }
     };
 
@@ -139,51 +134,30 @@ function isValidPackageQuery(query: PackageQuery): boolean {
   return true;
 }
 
-async function getAllPackages(startIndex: number, pageSize: number): Promise<{ packages: { metadata: PackageMetadata }[]; nextOffset?: number }> {
-  let currentIndex = 0;
-  let packages: PackageResponse[] = [];
-  let lastEvaluatedKey: Record<string, any> | undefined;
+// Helper function for enumerating all packages
+async function getAllPackages(
+  startIndex: number,
+  pageSize: number
+): Promise<PaginatedResponse<{ metadata: PackageMetadata }>> {
+  const params = {
+    TableName: PACKAGES_TABLE_NAME,
+    Limit: pageSize
+  };
 
-  // Keep scanning until we reach the desired start index
-  do {
-    const params = {
-      TableName: process.env.PACKAGES_TABLE_NAME,
-      Limit: pageSize,
-      ...(lastEvaluatedKey && { ExclusiveStartKey: lastEvaluatedKey })
-    };
-
-    const result = await dynamoDb.send(new ScanCommand(params));
-    const currentBatch = result.Items?.map(item => {
-      const unmarshalledItem = unmarshall(item);
-      return {
-        metadata: {
-          Name: unmarshalledItem.Name,
-          Version: unmarshalledItem.Version,
-          ID: unmarshalledItem.PackageID,
-        }
-      };
-    }) || [];
-
-    currentIndex += currentBatch.length;
-    packages = packages.concat(currentBatch);
-    lastEvaluatedKey = result.LastEvaluatedKey;
-
-  } while (lastEvaluatedKey && currentIndex < startIndex + pageSize);
-
-  // Slice the results to get the exact page we want
-  const paginatedPackages = packages.slice(startIndex, startIndex + pageSize);
+  const result = await dynamoDb.send(new ScanCommand(params));
+  const packages = result.Items?.map(item => unmarshallPackage(item)) || [];
 
   return {
-    packages: paginatedPackages,
-    nextOffset: packages.length >= startIndex + pageSize ? startIndex + pageSize : undefined
+    items: packages,
+    nextOffset: packages.length >= pageSize ? 
+      (startIndex + pageSize).toString() : undefined
   };
 }
 
 async function queryPackages(
   query: PackageQuery, 
   startIndex: number, 
-  pageSize: number,
-  paginationToken?: string
+  pageSize: number
 ): Promise<PaginatedResponse<{ metadata: PackageMetadata }>> {
   if (!query.Name) {
     throw new Error('Package name is required');
@@ -206,35 +180,24 @@ async function queryPackages(
           ':nameVal': query.Name,
           ...(query.Version && { ':versionVal': query.Version })
         }),
-        Limit: pageSize,
-        ...(paginationToken && { 
-          ExclusiveStartKey: JSON.parse(
-            Buffer.from(paginationToken, 'base64').toString()
-          )
-        })
+        Limit: pageSize
       };
 
       const result = await dynamoDb.send(new QueryCommand(params));
       const packages = result.Items?.map(item => unmarshallPackage(item)) || [];
 
-      // Encode LastEvaluatedKey as base64 if it exists
-      const nextToken = result.LastEvaluatedKey 
-        ? Buffer.from(JSON.stringify(result.LastEvaluatedKey)).toString('base64')
-        : undefined;
-
       return {
         items: packages,
-        nextOffset: nextToken
+        nextOffset: packages.length >= pageSize ? 
+          (startIndex + pageSize).toString() : undefined
       };
     }
 
-    // For semver ranges, we need to handle pagination differently
+    // For semver ranges
+    const MAX_ITEMS = 1000; // Safeguard against excessive memory usage
     let allVersions: PackageResponse[] = [];
-    let lastEvaluatedKey = paginationToken 
-      ? JSON.parse(Buffer.from(paginationToken, 'base64').toString())
-      : undefined;
+    let currentBatch: PackageResponse[] = [];
     
-    // Keep fetching until we have enough matching versions or run out of items
     do {
       const params = {
         TableName: PACKAGES_TABLE_NAME,
@@ -246,38 +209,31 @@ async function queryPackages(
         ExpressionAttributeValues: marshall({
           ':nameVal': query.Name
         }),
-        Limit: pageSize * 2, // Fetch more items since we'll filter some out
-        ...(lastEvaluatedKey && { ExclusiveStartKey: lastEvaluatedKey })
+        Limit: pageSize * 2 // Fetch extra to account for filtering
       };
 
       const result = await dynamoDb.send(new QueryCommand(params));
-      const batchVersions = result.Items?.map(item => unmarshallPackage(item)) || [];
+      currentBatch = (result.Items?.map(item => unmarshallPackage(item)) || [])
+        .filter(pkg => semver.satisfies(pkg.metadata.Version, query.Version || '*'));
       
-      // Filter matching versions
-      const matchingBatch = batchVersions.filter(pkg => 
-        semver.satisfies(pkg.metadata.Version, query.Version || '*')
-      );
-      
-      allVersions = [...allVersions, ...matchingBatch];
-      lastEvaluatedKey = result.LastEvaluatedKey;
+      allVersions = [...allVersions, ...currentBatch];
 
-      // Continue if we don't have enough matching versions and there are more results
+      // Safety check
+      if (allVersions.length > MAX_ITEMS) {
+        throw new Error(`Query would return too many results (over ${MAX_ITEMS} items)`);
+      }
+
     } while (
-      lastEvaluatedKey && 
+      currentBatch.length > 0 && 
       allVersions.length < startIndex + pageSize
     );
 
-    // Handle pagination of the filtered results
     const paginatedPackages = allVersions.slice(startIndex, startIndex + pageSize);
     
-    // Only return a next token if we have more matching results
-    const nextToken = (allVersions.length > startIndex + pageSize && lastEvaluatedKey)
-      ? Buffer.from(JSON.stringify(lastEvaluatedKey)).toString('base64')
-      : undefined;
-
     return {
       items: paginatedPackages,
-      nextOffset: nextToken
+      nextOffset: allVersions.length > startIndex + pageSize ? 
+        (startIndex + pageSize).toString() : undefined
     };
 
   } catch (error) {
