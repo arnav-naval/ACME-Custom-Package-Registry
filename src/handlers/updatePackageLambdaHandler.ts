@@ -149,7 +149,6 @@ export const getGithubUrlFromUrl = async (url: string): Promise<string> => {
         .replace('raw.githubusercontent.com', 'github.com')
         .replace('/blob/', '')
         .replace('/tree/', '')
-        .replace(/\/[^\/]+\.[^\/]+$/, '') // Remove file name if present
         .replace(/\/$/, ''); // Remove trailing slash
     } catch (err) {
       console.info("Error processing GitHub URL");

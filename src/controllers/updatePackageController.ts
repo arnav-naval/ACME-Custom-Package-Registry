@@ -73,14 +73,15 @@ export const updatePackageController = async (packageId: string, metadata: any, 
 export const handleUrlUpdate = async (packageId: string, url: string) => {
   try {
     // Get the zip file from the GitHub URL
-    const zip = await getZipFromGithubUrl(url);
+    const cleanedUrl = await getGithubUrlFromUrl(url);
+    const zip = await getZipFromGithubUrl(cleanedUrl);
 
     // Upload zip to S3
     const zipBuffer = zip.toBuffer();
     await uploadZipToS3(packageId, zipBuffer);
 
-    // Update URL in the main DynamoDB table
-    await updateMainTableField(packageId, 'URL', url);
+    // Update URL in the main DynamoDB table with the cleaned URL
+    await updateMainTableField(packageId, 'URL', cleanedUrl);
   } catch (error) {
     console.error('Error handling URL update:', error);
     throw error;
@@ -144,4 +145,66 @@ export const updateMainTableField = async (packageId: string, field: string, val
     console.error(`Error updating ${field} in DynamoDB:`, error);
     throw error;
   }
+};
+
+
+export const getGithubUrlFromUrl = async (url: string): Promise<string> => {
+  let githubUrl = url;
+
+  // Handle npm URLs
+  if (url.includes("npmjs.com")) {
+    try {
+      // Extract the package name from the URL
+      const packagePath = url.split("npmjs.com/package/")[1];
+      if (!packagePath) {
+        throw new Error("Invalid npm URL");
+      }
+
+      const apiUrl = `https://registry.npmjs.org/${packagePath}`;
+      const response = await fetch(apiUrl);
+
+      if (!response.ok) {
+        throw new Error(`npm API error: ${response.statusText}`);
+      }
+      const repoURL = await response.json();
+
+      const repo: string = repoURL ? repoURL.repository.url : null;
+
+      if (!repo) {
+        console.info("No repository URL found in npm data");
+        throw new Error("No repository URL found in npm data");
+      }
+
+      // Update to Github URL
+      githubUrl = repo
+        .replace("git+", "")
+        .replace("git:", "https:")
+        .replace(".git", "");
+    } catch (err) {
+      console.info("Error fetching npm data");
+      throw new Error(`Error fetching npm data: ${err.message}`);
+    }
+  }
+  
+  // Handle GitHub URLs
+  if (url.includes("github.com") || url.includes("raw.githubusercontent.com")) {
+    try {
+      // Clean up the GitHub URL to ensure it's in the correct format for repository access
+      githubUrl = url
+        .replace('raw.githubusercontent.com', 'github.com')
+        .replace('/blob/', '')
+        .replace('/tree/', '')
+        .replace(/\/$/, ''); // Remove trailing slash
+    } catch (err) {
+      console.info("Error processing GitHub URL");
+      throw new Error(`Error processing GitHub URL: ${err.message}`);
+    }
+  }
+
+  // If neither npm nor GitHub, throw error
+  if (!url.includes("npmjs.com") && !url.includes("github.com") && !url.includes("raw.githubusercontent.com")) {
+    throw new Error("URL must be from either npmjs.com or github.com");
+  }
+
+  return githubUrl;
 };
