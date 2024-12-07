@@ -36,7 +36,19 @@ jobs:
         
         # Install dependencies with updated syntax
         cd nodejs
-        npm install --omit=dev
+        npm install --production
+        cd ..
+
+        # Remove unnecessary files but keep package.json
+        find node_modules -type f \( \
+          -name "*.md" -o \
+          -name "*.txt" -o \
+          -name "LICENSE" -o \
+          -name "*.map" \) -delete
+        find node_modules -type d \( \
+          -name "test" -o \
+          -name "tests" -o \
+          -name "docs" \) -exec rm -rf {} +
         cd ..
         
         # Create the layer zip (fixed command)
