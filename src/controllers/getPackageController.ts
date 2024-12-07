@@ -1,9 +1,14 @@
 import { DynamoDBClient, GetItemCommand } from '@aws-sdk/client-dynamodb';
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
 import { APIGatewayProxyResult } from 'aws-lambda';
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 
 // Initialize clients 
 const dynamoDb = new DynamoDBClient({
+  region: process.env.AWS_REGION,
+});
+
+const s3Client = new S3Client({
   region: process.env.AWS_REGION,
 });
 
@@ -77,18 +82,37 @@ export const getPackageFromMainTable = async (packageId: string): Promise<Packag
       }
     }
 
-    if (item.Content) {
-      packageResponse.data.Content = item.Content;
-    }
-
+    // If URL exists, use it. Otherwise, fetch content from S3
     if (item.URL) {
       packageResponse.data.URL = item.URL;
+    } else {
+      packageResponse.data.Content = await getContentFromS3(packageId);
     }
   
     return packageResponse;
   } catch (error) {
     console.error('Error getting package from main table:', error);
     throw error;
+  }
+}
+
+// Add new function to handle S3 content retrieval
+async function getContentFromS3(packageId: string): Promise<string> {
+  try {
+    const s3Response = await s3Client.send(new GetObjectCommand({
+      Bucket: process.env.BUCKET_NAME,
+      Key: packageId,
+    }));
+
+    if (!s3Response.Body) {
+      throw new Error('No content found in S3');
+    }
+
+    const contentBuffer = await s3Response.Body.transformToByteArray();
+    return Buffer.from(contentBuffer).toString('base64');
+  } catch (error) {
+    console.error('Error retrieving content from S3:', error);
+    throw new Error('Failed to retrieve package content');
   }
 }
   
