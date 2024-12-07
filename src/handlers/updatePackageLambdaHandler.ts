@@ -109,7 +109,32 @@ export const getGithubUrlFromUrl = async (url: string): Promise<string> => {
   // Handle npm URLs
   if (url.includes("npmjs.com")) {
     try {
-      // ... existing npm handling code ...
+      // Extract the package name from the URL
+      const packagePath = url.split("npmjs.com/package/")[1];
+      if (!packagePath) {
+        throw new Error("Invalid npm URL");
+      }
+
+      const apiUrl = `https://registry.npmjs.org/${packagePath}`;
+      const response = await fetch(apiUrl);
+
+      if (!response.ok) {
+        throw new Error(`npm API error: ${response.statusText}`);
+      }
+      const repoURL = await response.json();
+
+      const repo: string = repoURL ? repoURL.repository.url : null;
+
+      if (!repo) {
+        console.info("No repository URL found in npm data");
+        throw new Error("No repository URL found in npm data");
+      }
+
+      // Update to Github URL
+      githubUrl = repo
+        .replace("git+", "")
+        .replace("git:", "https:")
+        .replace(".git", "");
     } catch (err) {
       console.info("Error fetching npm data");
       throw new Error(`Error fetching npm data: ${err.message}`);
@@ -117,18 +142,15 @@ export const getGithubUrlFromUrl = async (url: string): Promise<string> => {
   }
   
   // Handle GitHub URLs
-  if (url.includes("github.com")) {
+  if (url.includes("github.com") || url.includes("raw.githubusercontent.com")) {
     try {
-      // Convert github.com URLs to raw.githubusercontent.com
+      // Clean up the GitHub URL to ensure it's in the correct format for repository access
       githubUrl = url
-        .replace("github.com", "raw.githubusercontent.com")
-        .replace("/blob/", "/");
-      
-      // Verify the URL is accessible
-      const response = await fetch(githubUrl);
-      if (!response.ok) {
-        throw new Error(`GitHub URL is not accessible: ${response.statusText}`);
-      }
+        .replace('raw.githubusercontent.com', 'github.com')
+        .replace('/blob/', '')
+        .replace('/tree/', '')
+        .replace(/\/[^\/]+\.[^\/]+$/, '') // Remove file name if present
+        .replace(/\/$/, ''); // Remove trailing slash
     } catch (err) {
       console.info("Error processing GitHub URL");
       throw new Error(`Error processing GitHub URL: ${err.message}`);
@@ -136,7 +158,7 @@ export const getGithubUrlFromUrl = async (url: string): Promise<string> => {
   }
 
   // If neither npm nor GitHub, throw error
-  if (!url.includes("npmjs.com") && !url.includes("github.com")) {
+  if (!url.includes("npmjs.com") && !url.includes("github.com") && !url.includes("raw.githubusercontent.com")) {
     throw new Error("URL must be from either npmjs.com or github.com");
   }
 
