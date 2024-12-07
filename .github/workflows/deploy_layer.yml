@@ -19,7 +19,7 @@ jobs:
         # Create the nodejs directory structure
         mkdir -p nodejs
         
-        # Create a minimal package.json with only necessary dependencies
+        # Create a package.json with type: module and necessary dependencies
         node -e "
           const pkg = require('./package.json');
           const newPkg = {
@@ -34,14 +34,13 @@ jobs:
           require('fs').writeFileSync('nodejs/package.json', JSON.stringify(newPkg, null, 2));
         "
         
-        # Install only the minimal dependencies
+        # Install dependencies with updated syntax
         cd nodejs
-        npm install --production
+        npm install --omit=dev
+        cd ..
         
-        # Remove unnecessary files
-        
-        # Create the layer zip
-        zip -r layer.zip nodejs
+        # Create the layer zip (fixed command)
+        zip -r layer.zip ./nodejs/
 
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
