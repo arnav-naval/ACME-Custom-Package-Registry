@@ -72,8 +72,15 @@ export const updatePackageController = async (packageId: string, metadata: any, 
 
 export const handleUrlUpdate = async (packageId: string, url: string) => {
   try {
+    // Debug log
+    console.log('URL before cleaning:', url, typeof url);
+
     // Get the zip file from the GitHub URL
     const cleanedUrl = await getGithubUrlFromUrl(url);
+    
+    // Debug log
+    console.log('URL after cleaning:', cleanedUrl);
+    
     const zip = await getZipFromGithubUrl(cleanedUrl);
 
     // Upload zip to S3
