@@ -1,0 +1,47 @@
+name: Deploy Lambda Layer
+
+on:
+  workflow_dispatch:  # Manual trigger
+
+jobs:
+  deploy-layer:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Create Layer
+      run: |
+        # Create the nodejs directory structure required for Lambda Layers
+        mkdir -p nodejs
+        
+        # Copy package files
+        cp package.json nodejs/
+        cp package-lock.json nodejs/
+        
+        # Install only production dependencies
+        cd nodejs
+        npm install --production
+        cd ..
+        
+        # Create the layer zip
+        zip -r layer.zip nodejs
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-2
+
+    - name: Deploy Layer
+      run: |
+        aws lambda publish-layer-version \
+          --layer-name common-dependencies \
+          --description "Common dependencies for Lambda functions" \
+          --zip-file fileb://layer.zip \
+          --compatible-runtimes nodejs20.x

@@ -3,11 +3,7 @@ name: CI/CD for lambda function
 on:
   push:
     branches:
-      - 'feature/upload-package'
-      - 'feature/reset'
-      - 'feature/getPackage'
-      - 'feature/getRating'
-      - 'feature/uploadPackage'
+      - 'feature/getAllPackages'
       - main
   pull_request:
     branches: [ main ]
@@ -52,6 +48,12 @@ jobs:
     - name: Rename searchPackagesHandler file
       run: mv dist/handlers/searchPackagesHandler.js dist/handlers/searchPackagesHandler.mjs
 
+    - name: Rename getSomePackagesHandler file
+      run: mv dist/handlers/getSomePackagesHandler.js dist/handlers/getSomePackagesHandler.mjs
+
+    - name: Rename updatePackageHandler file
+      run: mv dist/handlers/updatePackageLambdaHandler.js dist/handlers/updatePackageLambdaHandler.mjs
+
     - name: Prepare for deployment
       run: npm prune --production
 
@@ -60,7 +62,6 @@ jobs:
         cd dist
         zip -r ../function.zip .
         cd ..
-        zip -ur function.zip node_modules package.json
     
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
@@ -76,3 +77,5 @@ jobs:
         aws lambda update-function-code --function-name arn:aws:lambda:us-east-2:412381743875:function:getPackage --zip-file fileb://function.zip
         aws lambda update-function-code --function-name arn:aws:lambda:us-east-2:412381743875:function:getRating --zip-file fileb://function.zip
         aws lambda update-function-code --function-name arn:aws:lambda:us-east-2:412381743875:function:searchPackages --zip-file fileb://function.zip
+        aws lambda update-function-code --function-name arn:aws:lambda:us-east-2:412381743875:function:updatePackage --zip-file fileb://function.zip
+        aws lambda update-function-code --function-name arn:aws:lambda:us-east-2:412381743875:function:getSomePackages --zip-file fileb://function.zip
