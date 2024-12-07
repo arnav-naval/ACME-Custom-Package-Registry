@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "module": "ESNext",
     "esModuleInterop": true,
     "target": "es6",
     "moduleResolution": "node",
@@ -7,6 +8,6 @@
     "outDir": "dist",
     "allowJs": true
   },
-  "include": ["src/**/*.ts", "src/tests/**/*.ts", "src/tests/controllers/packageController.spec.ts"],
+  "include": ["src/**/*.ts", "src/tests/**/*.ts"],
   "lib": ["es2015"]
 }
