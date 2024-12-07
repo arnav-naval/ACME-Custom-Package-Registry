@@ -1,5 +1,6 @@
 import { APIGatewayProxyHandler, APIGatewayProxyEvent, Context } from 'aws-lambda';
 import { updatePackageController } from '../controllers/updatePackageController.js';
+import { getGithubUrlFromUrl } from '../controllers/packageController.js';
 
 /**
  * Validates the package ID using the specified regex pattern.
@@ -73,6 +74,20 @@ export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEven
           error: 'Either Content or URL must be provided.',
         }),
       };
+    }
+
+    // Convert GitHub URLs if present
+    if (hasURL) {
+      try {
+        data.URL = getGithubUrlFromUrl(data.URL);
+      } catch (error) {
+        return {
+          statusCode: 400,
+          body: JSON.stringify({
+            error: 'Invalid GitHub URL format.',
+          }),
+        };
+      }
     }
 
     // Delegate logic to the controller
