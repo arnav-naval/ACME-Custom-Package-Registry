@@ -16,10 +16,14 @@ jobs:
 
     - name: Create Layer
       run: |
+        # Debug original dependencies
+        echo "Original package.json:"
+        cat package.json
+        
         # Create the nodejs directory structure
         mkdir -p nodejs
         
-        # Create a package.json with type: module and necessary dependencies
+        # Create a minimal package.json with only required dependencies
         node -e "
           const pkg = require('./package.json');
           const newPkg = {
@@ -34,16 +38,19 @@ jobs:
           require('fs').writeFileSync('nodejs/package.json', JSON.stringify(newPkg, null, 2));
         "
         
-        # Install dependencies with updated syntax
+        # Show the new package.json
+        echo "Layer package.json:"
+        cat nodejs/package.json
+        
+        # Install dependencies
         cd nodejs
         npm install --omit=dev
+        
+        # Debug size before zipping
+        echo "Layer size:"
+        du -sh .
+        
         cd ..
-        
-        # Debug directory structure
-        echo "Current directory structure:"
-        tree
-        
-        # Create the layer zip (maintaining nodejs directory structure)
         zip -r layer.zip nodejs
 
     - name: Configure AWS credentials
