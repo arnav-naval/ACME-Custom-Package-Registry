@@ -38,21 +38,13 @@ jobs:
         cd nodejs
         npm install --omit=dev
         cd ..
-
-        # Remove unnecessary files but keep package.json
-        find node_modules -type f \( \
-          -name "*.md" -o \
-          -name "*.txt" -o \
-          -name "LICENSE" -o \
-          -name "*.map" \) -delete
-        find node_modules -type d \( \
-          -name "test" -o \
-          -name "tests" -o \
-          -name "docs" \) -exec rm -rf {} +
-        cd ..
         
-        # Create the layer zip (fixed command)
-        zip -r layer.zip nodejs/*
+        # Debug directory structure
+        echo "Current directory structure:"
+        tree
+        
+        # Create the layer zip (maintaining nodejs directory structure)
+        zip -r layer.zip nodejs
 
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
