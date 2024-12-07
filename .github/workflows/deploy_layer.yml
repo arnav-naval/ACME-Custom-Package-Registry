@@ -16,16 +16,35 @@ jobs:
 
     - name: Create Layer
       run: |
-        # Create the nodejs directory structure required for Lambda Layers
+        # Create the nodejs directory structure
         mkdir -p nodejs
         
-        # Copy package files
-        cp package.json nodejs/
-        cp package-lock.json nodejs/
+        # Create a minimal package.json with only necessary dependencies
+        node -e "
+          const pkg = require('./package.json');
+          const newPkg = {
+            dependencies: {
+              'adm-zip': pkg.dependencies['adm-zip'],
+              'dotenv': pkg.dependencies['dotenv'],
+              'fs-extra': pkg.dependencies['fs-extra'],
+              'semver': pkg.dependencies['semver']
+            }
+          };
+          require('fs').writeFileSync('nodejs/package.json', JSON.stringify(newPkg, null, 2));
+        "
         
-        # Install only production dependencies
+        # Install only the minimal dependencies
         cd nodejs
         npm install --production
+        
+        # Remove unnecessary files
+        rm -rf node_modules/**/*.md
+        rm -rf node_modules/**/*.txt
+        rm -rf node_modules/**/LICENSE
+        rm -rf node_modules/**/*.map
+        rm -rf node_modules/**/test
+        rm -rf node_modules/**/tests
+        rm -rf node_modules/**/docs
         cd ..
         
         # Create the layer zip
