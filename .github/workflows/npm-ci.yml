@@ -59,6 +59,7 @@ jobs:
 
     - name: Create deployment package
       run: |
+        cp package.json dist/
         cd dist
         zip -r ../function.zip .
         cd ..
