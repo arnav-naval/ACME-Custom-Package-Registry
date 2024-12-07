@@ -15,7 +15,7 @@ export const validateId = (id: string): boolean => {
  * The Lambda handler for updating a package.
  * Validates the input, extracts the relevant data, and delegates logic to the controller.
  */
-export const updatePackageHandler: APIGatewayProxyHandler = async (event: APIGatewayProxyEvent, context: Context) => {
+export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEvent, context: Context) => {
   try {
     // Extract `id` from the path parameters
     const packageId = event.pathParameters?.id;
