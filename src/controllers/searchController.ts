@@ -21,7 +21,7 @@ export const searchPackages = async (event: APIGatewayProxyEvent): Promise<APIGa
     }
 
     const body = JSON.parse(event.body);
-    const { RegEx } = body.RegEx;
+    const { RegEx } = body;
     if (!RegEx) {
       return {
         statusCode: 400,
@@ -32,11 +32,11 @@ export const searchPackages = async (event: APIGatewayProxyEvent): Promise<APIGa
     // Attempt to compile the regex and catch any errors
     let regexPattern;
     try {
-      regexPattern = new RegExp(RegEx, 'i'); // Case-insensitive
+      regexPattern = new RegExp(RegEx);
     } catch (error) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: 'Invalid regular expression' }),
+        body: JSON.stringify({ error: 'There is missing field(s) in the PackageRegEx or it is formed improperly, or is invalid' }),
       };
     }
 
