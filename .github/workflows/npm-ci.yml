@@ -55,12 +55,6 @@ jobs:
     - name: Prepare for deployment
       run: npm prune --production
 
-    - name: Rename handler file
-      run: mv dist/handlers/searchPackagesHandler.js dist/handlers/searchPackagesHandler.mjs
-
-    - name: Prepare for deployment
-      run: npm prune --production
-
     - name: Create deployment package
       run: |
         cd dist
