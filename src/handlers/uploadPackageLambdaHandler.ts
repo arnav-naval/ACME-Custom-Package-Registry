@@ -28,36 +28,26 @@ const validateRequestBody = (body: PackageData): { isValid: boolean, error?: str
 export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEvent, context: Context) => {
   try {
     console.log('Received event:', JSON.stringify(event, null, 2));
-    
+
     let requestBody: PackageData;
     try {
-      // Handle both direct JSON and body-wrapped JSON
-      if (event.body) {
-        requestBody = typeof event.body === 'string' 
-          ? JSON.parse(event.body) 
-          : event.body;
-      } else {
-        // If no body property, treat the entire event as the request
-        requestBody = event as unknown as PackageData;
-      }
-      
+      // Parse the body
+      requestBody = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
       console.log('Parsed request body:', JSON.stringify(requestBody, null, 2));
     } catch (parseError) {
       console.error('JSON parsing error:', parseError);
       return {
         statusCode: 400,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           error: 'Invalid JSON format in request',
-          details: (parseError as Error).message
+          details: (parseError as Error).message,
         }),
       };
     }
 
+    // Validate the request body
     const validationResult = validateRequestBody(requestBody);
-    console.log('Validation result:', validationResult);
-    
-    //Check if validation fails
     if (!validationResult.isValid) {
       return {
         statusCode: 400,
@@ -66,12 +56,25 @@ export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEven
       };
     }
 
-    //Upload package to S3
+    // Process the package upload
     const response = await uploadPackage(requestBody);
+
+    // Return the correct structure: body should contain ONLY the relevant payload
     return {
-      statusCode: response.statusCode, 
-      body: response.body,
-      headers: { 'Content-Type': 'application/json' }
+      statusCode: 201, // Set the status code here
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        metadata: {
+          Name: requestBody.Name,
+          Version: requestBody.Version,
+          ID: response.ID, // Adjust based on your `uploadPackage` implementation
+        },
+        data: {
+          Name: requestBody.Name,
+          Version: response.PreviousVersion, // Adjust as necessary
+          URL: response.URL, // Include the relevant fields here
+        },
+      }),
     };
   } catch (error) {
     console.error('Error in uploadPackageLambdaHandler:', error);
