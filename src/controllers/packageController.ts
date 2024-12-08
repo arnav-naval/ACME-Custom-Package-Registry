@@ -263,13 +263,7 @@ export const uploadPackage = async (requestBody: PackageData): Promise<APIGatewa
       else {
         const url = await getGithubUrlFromUrl(requestBody.URL);
         zip = await getZipFromGithubUrl(url);
-        if (!requestBody.Name && !requestBody.Version) {
-          ({ name, version } = fetchPackageJson(zip));
-        }
-        else {
-          name = requestBody.Name;
-          version = requestBody.Version;
-        }
+        ({ name, version } = fetchPackageJson(zip));
       }
     } catch (err) {
       // Handle package.json validation errors with 400 status
