@@ -93,7 +93,7 @@ export const resetRegistry = async (): Promise<APIGatewayProxyResult> => {
     await deleteAllS3Objects();
 
     //Delete all items in the two DynamoDB tables
-    await resetDynamoDBTable(process.env.PACKAGE_TABLE_NAME, 'PackageID');
+    await resetDynamoDBTable(process.env.PACKAGES_TABLE_NAME, 'PackageID');
     await resetDynamoDBTable(process.env.SCORES_TABLE_NAME, 'id');
 
     return {
