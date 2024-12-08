@@ -38,18 +38,16 @@ export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEven
 
     let requestBody: PackageData;
     try {
-      // If body is a string, parse it; otherwise use it directly
-      requestBody = JSON.parse(event.body) 
-     
-      // Debug logging
+      // API Gateway always provides the body as a string, so we need to parse it
+      requestBody = JSON.parse(event.body);
+      
       console.log('Parsed request body:', requestBody);
     } catch (parseError) {
       console.error('JSON parsing error:', parseError);
       return {
         statusCode: 400,
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          error: 'There is missing field(s) in the PackageID or it is formed improperly, or is invalid.',
+          error: 'Invalid JSON format in request body',
         }),
       };
     }
