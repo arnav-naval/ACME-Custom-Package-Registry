@@ -124,7 +124,7 @@ async function deleteAllS3Objects() {
 
     while (isTruncated) {
       const listCommand = new ListObjectVersionsCommand({
-        Bucket: process.env.S3_BUCKET_NAME,
+        Bucket: process.env.BUCKET__NAME,
         KeyMarker: keyMarker,
         VersionIdMarker: versionIdMarker,
       });
@@ -143,7 +143,7 @@ async function deleteAllS3Objects() {
           while (retries > 0) {
             try {
               await s3.send(new DeleteObjectsCommand({
-                Bucket: process.env.S3_BUCKET_NAME,
+                Bucket: process.env.BUCKET_NAME,
                 Delete: {
                   Objects: chunk.map(version => ({
                     Key: version.Key!,
