@@ -1,6 +1,5 @@
 import { S3Client, DeleteObjectsCommand, ListObjectVersionsCommand } from '@aws-sdk/client-s3';
 import { DynamoDBClient, ScanCommand, BatchWriteItemCommand } from '@aws-sdk/client-dynamodb';
-import { marshall } from '@aws-sdk/util-dynamodb';
 import { APIGatewayProxyResult } from 'aws-lambda';
 
 //initialize S3 client
@@ -36,13 +35,15 @@ export const resetDynamoDBTable = async (tableName: string, keyName: string) => 
       for (let i = 0; i < items.Items.length; i += batchSize) {
         const batch = items.Items.slice(i, i + batchSize);
         const batchWriteRequests = batch.map(item => {
-          // Log the key being used for deletion
-          console.log(`Deleting item with key:`, item[keyName]);
+          // Extract the actual value from the DynamoDB attribute
+          const keyValue = item[keyName].S;
+          console.log(`Deleting item with key value:`, keyValue);
+          
           return {
             DeleteRequest: {
-              Key: marshall({
-                [keyName]: item[keyName]
-              })
+              Key: {
+                [keyName]: { S: keyValue }  // Explicitly specify as String type
+              }
             }
           };
         });
