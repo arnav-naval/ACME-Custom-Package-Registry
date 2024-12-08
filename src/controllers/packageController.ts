@@ -323,7 +323,7 @@ export const uploadPackage = async (requestBody: PackageData): Promise<APIGatewa
       await deletePackageFromS3(packageId);
       return {
         statusCode: 500,
-        body: JSON.stringify({ error: 'Error uploading package scores to dynamoDB' })
+        body: JSON.stringify({ error: `Error uploading package scores to dynamoDB: ${error.message}` })
       };
     }
 
