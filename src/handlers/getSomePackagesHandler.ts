@@ -53,7 +53,7 @@ export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEven
     return {
       statusCode: 500,
       body: JSON.stringify({
-        error: 'Internal server error while getting packages'
+        error: `Internal server error while getting packages error: ${error}`
       })
     };
   }
