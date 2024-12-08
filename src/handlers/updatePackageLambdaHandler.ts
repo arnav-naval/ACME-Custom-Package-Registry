@@ -30,7 +30,7 @@ export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEven
       };
     }
 
-    // Validate the request body
+    // Validate and parse the request body
     if (!event.body) {
       return {
         statusCode: 400,
@@ -40,7 +40,8 @@ export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEven
       };
     }
 
-    const requestBody = JSON.parse(event.body);
+    // Parse body if it's a string, otherwise use it directly
+    const requestBody = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
 
     // Validate that `metadata` and `data` fields exist
     const { metadata, data } = requestBody;
