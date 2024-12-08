@@ -16,12 +16,19 @@ export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEven
   try {
     const packageId = event.pathParameters?.id;
 
-    if (!packageId || !validateId(packageId)) {
+    if (!packageId) {
       return {
         statusCode: 400,
         body: JSON.stringify({ 
           error: 'There is missing field(s) in the PackageID or it is formed improperly, or is invalid.' 
         }),
+      };
+    }
+
+    if (!validateId(packageId)) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: 'PackageID is invalid.' }),
       };
     }
 
