@@ -25,7 +25,16 @@ export interface PackageResponse {
 export const updatePackageController = async (packageId: string, metadata: any, data: any) => {
   try {
     // Fetch package from the main table
-    const packageDetails = await getPackageFromMainTable(packageId);
+    let packageDetails;
+    try {
+      packageDetails = await getPackageFromMainTable(packageId);
+    } catch (error) {
+      console.error('Error fetching package:', error);
+      return {
+        statusCode: 404,
+        body: JSON.stringify({ error: 'Package does not exist.' }),
+      };
+    }
 
     if (!packageDetails) {
       return {
