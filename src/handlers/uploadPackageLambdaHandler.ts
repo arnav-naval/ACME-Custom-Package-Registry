@@ -31,7 +31,7 @@ export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEven
 
     let requestBody: PackageData;
     try {
-      // Parse the body
+      // Parse the request body
       requestBody = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
       console.log('Parsed request body:', JSON.stringify(requestBody, null, 2));
     } catch (parseError) {
@@ -56,25 +56,15 @@ export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEven
       };
     }
 
-    // Process the package upload
+    // Call uploadPackage
     const response = await uploadPackage(requestBody);
 
-    // Return the correct structure: body should contain ONLY the relevant payload
+    // Parse and return the response body directly
+    const parsedBody = JSON.parse(response.body); // Parse the string to ensure it's valid JSON
     return {
-      statusCode: 201, // Set the status code here
+      statusCode: response.statusCode, // Pass the status code from uploadPackage
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        metadata: {
-          Name: requestBody.Name,
-          Version: requestBody.Version,
-          ID: response.ID, // Adjust based on your `uploadPackage` implementation
-        },
-        data: {
-          Name: requestBody.Name,
-          Version: response.PreviousVersion, // Adjust as necessary
-          URL: response.URL, // Include the relevant fields here
-        },
-      }),
+      body: JSON.stringify(parsedBody), // Return the parsed body without statusCode inside
     };
   } catch (error) {
     console.error('Error in uploadPackageLambdaHandler:', error);
@@ -85,3 +75,4 @@ export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEven
     };
   }
 };
+
