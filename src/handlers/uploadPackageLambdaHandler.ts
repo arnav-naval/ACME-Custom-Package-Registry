@@ -28,7 +28,6 @@ const validateRequestBody = (body: PackageData): { isValid: boolean, error?: str
 export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEvent, context: Context) => {
   try {
     console.log('Received event:', JSON.stringify(event, null, 2));
-
     let requestBody: PackageData;
     try {
       // Parse the request body
@@ -45,7 +44,6 @@ export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEven
         }),
       };
     }
-
     // Validate the request body
     const validationResult = validateRequestBody(requestBody);
     if (!validationResult.isValid) {
@@ -55,16 +53,13 @@ export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEven
         body: JSON.stringify({ error: validationResult.error }),
       };
     }
-
     // Call uploadPackage
     const response = await uploadPackage(requestBody);
-
-    // Parse and return the response body directly
-    const parsedBody = JSON.parse(response.body); // Parse the string to ensure it's valid JSON
+    // Parse the response body and return only its contents
+    const parsedBody = JSON.parse(response.body);
     return {
-      statusCode: response.statusCode, // Pass the status code from uploadPackage
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(parsedBody), // Return the parsed body without statusCode inside
+      body: JSON.stringify(parsedBody), // Return only the parsed body, removing statusCode
     };
   } catch (error) {
     console.error('Error in uploadPackageLambdaHandler:', error);
@@ -75,4 +70,3 @@ export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEven
     };
   }
 };
-
