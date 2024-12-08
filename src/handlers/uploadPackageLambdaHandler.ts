@@ -31,6 +31,7 @@ export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEven
     if (!event.body) {
       return {
         statusCode: 400,
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ error: 'Request body is missing or improperly formatted.' }),
       };
     }
@@ -48,6 +49,7 @@ export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEven
       console.error('JSON parsing error:', parseError);
       return {
         statusCode: 400,
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           error: 'There is missing field(s) in the PackageID or it is formed improperly, or is invalid.',
         }),
@@ -61,15 +63,22 @@ export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEven
     if (!validationResult.isValid) {
       return {
         statusCode: 400,
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ error: validationResult.error }),
       };
     }
 
     //Upload package to S3
-    return await uploadPackage(requestBody);
+    const response = await uploadPackage(requestBody);
+    return {
+      ...response,
+      headers: { 'Content-Type': 'application/json' }
+    };
   } catch (error) {
+    console.error('Error in uploadPackageLambdaHandler:', error);
     return {
       statusCode: 500,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ error: 'An unexpected error occurred' }),
     };
   }

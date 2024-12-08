@@ -21,6 +21,7 @@ export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEven
     
     return {
       statusCode: 500,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         error: 'Internal server error while resetting registry'
       })
