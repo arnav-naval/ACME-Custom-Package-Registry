@@ -50,7 +50,8 @@ export const getPackages = async (options: GetPackagesOptions): Promise<APIGatew
   const pageSize = 10;
 
   try {
-    const startIndex = offset ? parseInt(offset, 10) : 0;
+    // Handle empty string or undefined offset
+    const startIndex = !offset || offset === "" ? 0 : parseInt(offset, 10);
     
     if (isNaN(startIndex) || startIndex < 0) {
       return {
