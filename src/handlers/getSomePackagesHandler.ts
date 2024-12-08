@@ -7,7 +7,7 @@ import { getPackages } from '../controllers/getSomePackagesController.js';
 export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEvent, context: Context) => {
   try {
     // Parse the request body
-    const queries = event.body ? JSON.parse(event.body) : null;
+    const queries = JSON.parse(event.body || '[]');
     
     // Validate request body
     if (!Array.isArray(queries) || queries.length === 0) {
@@ -37,8 +37,7 @@ export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEven
     // Call controller with options
     return await getPackages({
       queries,
-      offset,
-      pageSize: 10
+      offset
     });
 
   } catch (error) {

@@ -35,7 +35,6 @@ interface PackageQuery {
 interface GetPackagesOptions {
   queries: PackageQuery[];
   offset?: string;
-  pageSize?: number;
 }
 
 // Update the response format to match spec exactly
@@ -47,17 +46,10 @@ interface PackageMetadataResponse {
 
 //Function that gets packages based on query criteria with pagination
 export const getPackages = async (options: GetPackagesOptions): Promise<APIGatewayProxyResult> => {
-  const { queries, offset, pageSize = 10 } = options;
+  const { queries, offset } = options;
+  const pageSize = 10;
 
   try {
-    // Validate queries
-    if (!Array.isArray(queries) || queries.length === 0) {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ error: 'Invalid query format' })
-      };
-    }
-
     const startIndex = offset ? parseInt(offset, 10) : 0;
     
     if (isNaN(startIndex) || startIndex < 0) {
