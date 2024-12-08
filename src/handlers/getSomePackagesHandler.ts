@@ -7,7 +7,8 @@ import { getPackages } from '../controllers/getSomePackagesController.js';
 export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEvent, context: Context) => {
   try {
     // Parse the request body
-    let {queries, offset} = JSON.parse(event.body);
+    const bodyData = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
+    let {queries, offset} = bodyData;
     if (offset == "") {
       offset = 0;
     }
