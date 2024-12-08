@@ -1,5 +1,5 @@
 import { uploadPackage, PackageData} from '../controllers/packageController.js';
-import { APIGatewayProxyHandler, APIGatewayProxyEvent, Context } from 'aws-lambda';
+import { APIGatewayProxyHandler, APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-lambda';
 
 //Function to process the request body of URL, Content, and JSProgram
 const validateRequestBody = (body: PackageData): { isValid: boolean, error?: string } => {
@@ -10,7 +10,6 @@ const validateRequestBody = (body: PackageData): { isValid: boolean, error?: str
      error: 'Missing required fields: Must provide either URL or Content',
    };
  }
-
  // Check if both URL and Content are provided (not allowed)
  if (body.URL && body.Content) {
    return {
@@ -18,14 +17,13 @@ const validateRequestBody = (body: PackageData): { isValid: boolean, error?: str
      error: 'Cannot provide both URL and Content fields',
    };
  }
-
  //If all checks pass, return true
  return {
    isValid: true,
  }; 
 };
 
-export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEvent, context: Context) => {
+export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEvent, context: Context): Promise<APIGatewayProxyResult> => {
   try {
     console.log('Received event:', JSON.stringify(event, null, 2));
     let requestBody: PackageData;
