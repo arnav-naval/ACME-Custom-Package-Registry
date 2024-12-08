@@ -14,7 +14,7 @@ export const validateId = (id: string): boolean => {
  */
 export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEvent, context: Context) => {
   try {
-    const packageId = event.pathParameters?.id;
+    const packageId = event.queryStringParameters?.id;
 
     if (!packageId) {
       return {
