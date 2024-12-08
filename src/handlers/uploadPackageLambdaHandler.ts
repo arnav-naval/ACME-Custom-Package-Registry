@@ -27,8 +27,11 @@ const validateRequestBody = (body: PackageData): { isValid: boolean, error?: str
 
 export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEvent, context: Context) => {
   try {
+    console.log('Received event:', JSON.stringify(event, null, 2));
+    
     //Check if request body is missing
     if (!event.body) {
+      console.log('Event body is null or undefined');
       return {
         statusCode: 400,
         headers: { 'Content-Type': 'application/json' },
@@ -38,18 +41,20 @@ export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEven
 
     let requestBody: PackageData;
     try {
-      // Check if event.body is already an object (pre-parsed)
+      // API Gateway might send the body as a string even if it's JSON
       requestBody = typeof event.body === 'string' 
         ? JSON.parse(event.body) 
-        : event.body;
+        : event.body as PackageData;
       
-      console.log('Parsed request body:', requestBody);
+      console.log('Parsed request body:', JSON.stringify(requestBody, null, 2));
     } catch (parseError) {
       console.error('JSON parsing error:', parseError);
       return {
         statusCode: 400,
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           error: 'Invalid JSON format in request body',
+          details: (parseError as Error).message
         }),
       };
     }
