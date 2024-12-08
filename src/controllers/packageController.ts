@@ -21,7 +21,9 @@ const dynamoDb = new DynamoDBClient({
 export interface PackageData {
   Content?: string;
   URL?: string;
-  JSProgram: string;
+  JSProgram?: string;
+  Name?: string;
+  Version?: string;
 }
 
 //Function to generate a unique package id
@@ -250,12 +252,16 @@ export const uploadPackage = async (requestBody: PackageData): Promise<APIGatewa
       if (requestBody.Content) {
         const tempBuffer = Buffer.from(requestBody.Content, 'base64');
         zip = new AdmZip(tempBuffer);
-        ({ name, version } = fetchPackageJson(zip));
+        if (!requestBody.Name && !requestBody.Version) {
+          ({ name, version } = fetchPackageJson(zip));
+        }
       }
       else {
         const url = await getGithubUrlFromUrl(requestBody.URL);
         zip = await getZipFromGithubUrl(url);
-        ({ name, version } = fetchPackageJson(zip));
+        if (!requestBody.Name && !requestBody.Version) {
+          ({ name, version } = fetchPackageJson(zip));
+        }
       }
     } catch (err) {
       // Handle package.json validation errors with 400 status

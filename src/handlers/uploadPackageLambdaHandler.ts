@@ -39,10 +39,8 @@ export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEven
     let requestBody: PackageData;
     try {
       // If body is a string, parse it; otherwise use it directly
-      requestBody = typeof event.body === 'string' 
-        ? JSON.parse(event.body) 
-        : event.body as PackageData;
-      
+      requestBody = JSON.parse(event.body) 
+     
       // Debug logging
       console.log('Parsed request body:', requestBody);
     } catch (parseError) {
