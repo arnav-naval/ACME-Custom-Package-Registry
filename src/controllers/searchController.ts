@@ -42,7 +42,10 @@ export const searchPackages = async (event: APIGatewayProxyEvent): Promise<APIGa
 
     const params = {
       TableName: TABLE_NAME,
-      ProjectionExpression: "Name, Version, PackageID, ReadMe",
+      ProjectionExpression: "#name, Version, PackageID, ReadMe",
+      ExpressionAttributeNames: {
+        "#name": "Name", // Escaping reserved keyword
+      },
     };
     const result = await dynamoDBDocClient.send(new ScanCommand(params));
     const matchedPackages = (result.Items || []).filter(pkg =>
