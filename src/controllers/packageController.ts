@@ -157,7 +157,7 @@ export const fetchPackageJson = (zip: AdmZip): { name: string, version: string }
 
   //Throw an error if package.json is not found
   if (!packageJsonEntry) {
-    throw new Error('Package.json not found in the zip file');
+    throw new Error('Package.json not found in the zip file, #1');
   }
  
   //Get the content of the package.json entry
@@ -413,8 +413,13 @@ const getGithubUrlFromZip = async (zip: AdmZip): Promise<string> => {
   const zipEntries = zip.getEntries();
   let packageJsonEntry = zipEntries.find(entry => entry.entryName === 'package.json');
 
+  //If not found at root, look for any package.json
   if (!packageJsonEntry) {
-    throw new Error('Package.json not found in the zip file');
+    packageJsonEntry = zipEntries.find(entry => entry.entryName.endsWith('package.json'));
+  }
+
+  if (!packageJsonEntry) {
+    throw new Error('Package.json not found in the zip file, #2');
   }
  
   const packageJsonContent = packageJsonEntry.getData().toString('utf8');
