@@ -7,7 +7,10 @@ import { getPackages } from '../controllers/getSomePackagesController.js';
 export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEvent, context: Context) => {
   try {
     // Parse the request body
-    const queries = JSON.parse(event.body || '[]');
+    let {queries, offset} = JSON.parse(event.body);
+    if (offset == "") {
+      offset = 0;
+    }
     
     // Validate request body
     if (!Array.isArray(queries) || queries.length === 0) {
@@ -32,7 +35,6 @@ export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEven
     }
 
     // Get offset from query parameters
-    const offset = event.queryStringParameters?.offset;
 
     // Call controller with options
     return await getPackages({
