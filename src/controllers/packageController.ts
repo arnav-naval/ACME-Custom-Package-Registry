@@ -246,16 +246,27 @@ export const uploadPackage = async (requestBody: PackageData): Promise<APIGatewa
     let zip: AdmZip;
     let name: string;
     let version: string;
-    if (requestBody.Content) {
-      const tempBuffer = Buffer.from(requestBody.Content, 'base64');
-      zip = new AdmZip(tempBuffer);
-      ({ name, version } = fetchPackageJson(zip));
+    try {
+      if (requestBody.Content) {
+        const tempBuffer = Buffer.from(requestBody.Content, 'base64');
+        zip = new AdmZip(tempBuffer);
+        ({ name, version } = fetchPackageJson(zip));
+      }
+      else {
+        const url = await getGithubUrlFromUrl(requestBody.URL);
+        zip = await getZipFromGithubUrl(url);
+        ({ name, version } = fetchPackageJson(zip));
+      }
+    } catch (err) {
+      // Handle package.json validation errors with 400 status
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ 
+          error: err instanceof Error ? err.message : 'Invalid package.json format'
+        })
+      };
     }
-    else {
-      const url = await getGithubUrlFromUrl(requestBody.URL);
-      zip = await getZipFromGithubUrl(url);
-      ({ name, version } = fetchPackageJson(zip));
-    }
+
     const packageId = generatePackageId(name, version);
 
     //Check if package already exists in S3 bucket
@@ -331,6 +342,20 @@ export const uploadPackage = async (requestBody: PackageData): Promise<APIGatewa
   } catch (err) {
     console.error('Error processing package upload:', err);
     
+    // Return 400 for known validation errors
+    if (err instanceof Error && (
+      err.message.includes('package.json') ||
+      err.message.includes('Invalid package') ||
+      err.message.includes('Repository') ||
+      err.message.includes('npm URL')
+    )) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: err.message }),
+      };
+    }
+    
+    // Return 500 for unexpected server errors
     return {
       statusCode: 500,
       body: JSON.stringify({ 
