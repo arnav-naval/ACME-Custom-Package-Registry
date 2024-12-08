@@ -32,7 +32,7 @@ export const updatePackageController = async (packageId: string, metadata: any, 
       console.error('Error fetching package:', error);
       return {
         statusCode: 404,
-        body: JSON.stringify({ error: 'Package does not exist.' }),
+        body: JSON.stringify({ error: 'Package does not exist, error: ' + error }),
       };
     }
 
