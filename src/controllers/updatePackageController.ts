@@ -142,7 +142,9 @@ export const updateMainTableField = async (packageId: string, field: string, val
       Key: marshall({ PackageID: packageId }),
       UpdateExpression: `SET #field = :value`,
       ExpressionAttributeNames: { '#field': field },
-      ExpressionAttributeValues: { ':value': value },
+      ExpressionAttributeValues: marshall({ 
+        ':value': value 
+      })
     };
 
     const command = new UpdateItemCommand(params);
