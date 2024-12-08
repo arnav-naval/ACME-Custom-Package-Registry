@@ -6,10 +6,14 @@ import { getPackages } from '../controllers/getSomePackagesController.js';
  */
 export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEvent, context: Context) => {
   try {
+    console.error('Incoming event type:', typeof event);
     console.error('Incoming event:', JSON.stringify(event));
+    console.error('Raw body type:', typeof event.body);
     console.error('Raw body:', event.body);
     
-    if (!event.body) {
+    // More permissive body check
+    if (event.body === undefined || event.body === null) {
+      console.error('Body is null or undefined');
       return {
         statusCode: 400,
         body: JSON.stringify({ 
@@ -21,37 +25,35 @@ export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEven
     // Parse body data, handling both string and parsed object cases
     let bodyData;
     try {
-      bodyData = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
-      console.error('Parsed bodyData:', bodyData);
+      // Handle case where API Gateway has already parsed the body
+      if (typeof event.body === 'object' && event.body !== null) {
+        bodyData = event.body;
+      } else {
+        bodyData = JSON.parse(event.body);
+      }
+      
+      console.error('Parsed bodyData:', JSON.stringify(bodyData));
+      
+      // Handle case where body is an array (convert to expected format)
+      if (Array.isArray(bodyData)) {
+        console.error('Converting array to object format');
+        bodyData = {
+          queries: bodyData,
+          offset: ""
+        };
+      }
+      
+      console.error('Final bodyData:', JSON.stringify(bodyData));
+
     } catch (parseError) {
       console.error('Error parsing body:', parseError);
       return {
         statusCode: 400,
         body: JSON.stringify({ 
-          error: 'Invalid JSON in request body' 
+          error: `Invalid JSON in request body: ${parseError.message}` 
         })
       };
     }
-    
-    // Handle case where body is an array (convert to expected format)
-    if (Array.isArray(bodyData)) {
-      console.error('Converting array to object format');
-      bodyData = {
-        queries: bodyData,
-        offset: ""
-      };
-    }
-    
-    if (!bodyData) {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ 
-          error: 'Invalid request body format' 
-        })
-      };
-    }
-    
-    console.error('Final bodyData:', bodyData);
     
     // Extract queries and offset with default
     const {queries, offset = ""} = bodyData;
