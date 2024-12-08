@@ -255,12 +255,20 @@ export const uploadPackage = async (requestBody: PackageData): Promise<APIGatewa
         if (!requestBody.Name && !requestBody.Version) {
           ({ name, version } = fetchPackageJson(zip));
         }
+        else {
+          name = requestBody.Name;
+          version = requestBody.Version;
+        }
       }
       else {
         const url = await getGithubUrlFromUrl(requestBody.URL);
         zip = await getZipFromGithubUrl(url);
         if (!requestBody.Name && !requestBody.Version) {
           ({ name, version } = fetchPackageJson(zip));
+        }
+        else {
+          name = requestBody.Name;
+          version = requestBody.Version;
         }
       }
     } catch (err) {
@@ -495,6 +503,14 @@ const uploadPackageMetadataToScoresTable= async (scores: any, packageId: string)
         LicenseScore: scores.LicenseScore,
         GoodPinningPractice: scores.GoodPinningPractice,
         PullRequest: scores.PullRequest,
+        NetScoreLatency: scores.NetScoreLatency,
+        BusFactorLatency: scores.BusFactorLatency,
+        CorrectnessLatency: scores.CorrectnessLatency,
+        RampUpLatency: scores.RampUpLatency,
+        ResponsiveMaintainerLatency: scores.ResponsiveMaintainerLatency,
+        LicenseScoreLatency: scores.LicenseScoreLatency,
+        GoodPinningPracticeLatency: scores.GoodPinningPracticeLatency,
+        PullRequestLatency: scores.PullRequestLatency,
       }
     };
 
