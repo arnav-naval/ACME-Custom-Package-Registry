@@ -39,7 +39,7 @@ export const updatePackageController = async (packageId: string, metadata: any, 
     if (!packageDetails) {
       return {
         statusCode: 404,
-        body: JSON.stringify({ error: 'Package does not exist.' }),
+        body: JSON.stringify({ error: 'Package does not exist number 2' }),
       };
     }
 
