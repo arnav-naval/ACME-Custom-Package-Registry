@@ -14,26 +14,38 @@ const dynamoDb = new DynamoDBClient({
 })
 
 //Function to delete all items in a DynamoDB table
-export const resetDynamoDBTable = async (tableName: string, keyName: string = 'id') => {
+export const resetDynamoDBTable = async (tableName: string, keyName: string) => {
   try {
+    // Add logging to help debug
+    console.log(`Attempting to reset table: ${tableName} with key: ${keyName}`);
+    
     const batchSize = 25;
     const scanCommand = new ScanCommand({
       TableName: tableName,
     });
 
     let items = await dynamoDb.send(scanCommand);
+    
+    // Log the first item to see its structure
+    if (items.Items && items.Items.length > 0) {
+      console.log('Sample item structure:', JSON.stringify(items.Items[0], null, 2));
+    }
 
     while (items.Items && items.Items.length > 0) {
       // Process items in batches
       for (let i = 0; i < items.Items.length; i += batchSize) {
         const batch = items.Items.slice(i, i + batchSize);
-        const batchWriteRequests = batch.map(item => ({
-          DeleteRequest: {
-            Key: marshall({
-              [keyName]: item[keyName]
-            })
-          }
-        }));
+        const batchWriteRequests = batch.map(item => {
+          // Log the key being used for deletion
+          console.log(`Deleting item with key:`, item[keyName]);
+          return {
+            DeleteRequest: {
+              Key: marshall({
+                [keyName]: item[keyName]
+              })
+            }
+          };
+        });
 
         // Add retry logic for unprocessed items
         let unprocessedItems = {
