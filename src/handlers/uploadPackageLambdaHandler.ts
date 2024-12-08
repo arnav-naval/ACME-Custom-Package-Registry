@@ -71,7 +71,8 @@ export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEven
     //Upload package to S3
     const response = await uploadPackage(requestBody);
     return {
-      ...response,
+      statusCode: response.statusCode, 
+      body: response.body,
       headers: { 'Content-Type': 'application/json' }
     };
   } catch (error) {
