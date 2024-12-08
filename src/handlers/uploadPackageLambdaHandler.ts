@@ -1,6 +1,5 @@
 import { uploadPackage, PackageData} from '../controllers/packageController.js';
-import { APIGatewayProxyHandler, APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-lambda';
-
+import { APIGatewayProxyHandler, APIGatewayProxyEvent, Context } from 'aws-lambda';
 //Function to process the request body of URL, Content, and JSProgram
 const validateRequestBody = (body: PackageData): { isValid: boolean, error?: string } => {
   // Check if either URL or Content is provided
@@ -22,8 +21,7 @@ const validateRequestBody = (body: PackageData): { isValid: boolean, error?: str
    isValid: true,
  }; 
 };
-
-export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEvent, context: Context): Promise<APIGatewayProxyResult> => {
+export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEvent, context: Context) => {
   try {
     console.log('Received event:', JSON.stringify(event, null, 2));
     let requestBody: PackageData;
@@ -53,11 +51,12 @@ export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEven
     }
     // Call uploadPackage
     const response = await uploadPackage(requestBody);
-    // Parse the response body and return only its contents
-    const parsedBody = JSON.parse(response.body);
+    // Parse and return the response body directly
+    const parsedBody = JSON.parse(response.body); // Parse the string to ensure it's valid JSON
     return {
+      statusCode: response.statusCode, // Pass the status code from uploadPackage
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(parsedBody), // Return only the parsed body, removing statusCode
+      body: JSON.stringify(parsedBody), // Return the parsed body without statusCode inside
     };
   } catch (error) {
     console.error('Error in uploadPackageLambdaHandler:', error);
