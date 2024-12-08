@@ -6,12 +6,18 @@ import { getPackages } from '../controllers/getSomePackagesController.js';
  */
 export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEvent, context: Context) => {
   try {
-    // Parse the request body
+    // Log the incoming event for debugging
+    console.log('Incoming event:', JSON.stringify(event));
+    
+    // Get body data, handling both string and parsed object cases
     const bodyData = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
-    let {queries, offset} = bodyData;
-    if (offset == "") {
-      offset = 0;
-    }
+    console.log('Parsed body data:', bodyData);
+    
+    // Extract queries and offset with default
+    const {queries, offset = 0} = bodyData;
+    
+    // Convert empty string offset to 0
+    const numericOffset = offset === "" ? 0 : Number(offset);
     
     // Validate request body
     if (!Array.isArray(queries) || queries.length === 0) {
@@ -35,12 +41,10 @@ export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEven
       }
     }
 
-    // Get offset from query parameters
-
     // Call controller with options
     return await getPackages({
       queries,
-      offset
+      offset: numericOffset.toString()
     });
 
   } catch (error) {
