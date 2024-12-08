@@ -47,6 +47,8 @@ export const searchPackages = async (event: APIGatewayProxyEvent): Promise<APIGa
         "#name": "Name", // Escaping reserved keyword
       },
     };
+    
+
     const result = await dynamoDBDocClient.send(new ScanCommand(params));
     const matchedPackages = (result.Items || []).filter(pkg =>
       regexPattern.test(pkg.Name) || (pkg.ReadMe && regexPattern.test(pkg.ReadMe))
