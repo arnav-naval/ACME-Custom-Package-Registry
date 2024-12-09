@@ -48,8 +48,7 @@ export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEven
         statusCode: 400,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          error: 'Invalid JSON format in request',
-          details: (parseError as Error).message
+          error: 'Invalid JSON format in request'
         }),
       };
     }
