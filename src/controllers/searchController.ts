@@ -13,15 +13,14 @@ const TABLE_NAME = "Packages";
  */
 export const searchPackages = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    if (!event.body) {
+    if (!event) {
       return {
         statusCode: 400,
         body: JSON.stringify({ error: 'Missing request body' }),
       };
     }
 
-    const body = JSON.parse(event.body);
-    const { RegEx } = body;
+    const { RegEx } = event as any;
     if (!RegEx) {
       return {
         statusCode: 400,
