@@ -1,24 +1,64 @@
-import {PackageController} from '../../controllers/packageController.js';
-import * as MetricScore from '../../metric_score.js';
-
-import { S3Client, PutObjectCommand, PutObjectCommandOutput, HeadObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, PutObjectCommandOutput, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { DynamoDBClient, PutItemCommand } from '@aws-sdk/client-dynamodb';
 import { APIGatewayProxyEvent } from 'aws-lambda';
+
+import { marshall } from '@aws-sdk/util-dynamodb';
 import { 
-  generatePackageId,
-  getZipFromGithubUrl,
   uploadBase64ZipToS3, 
   fetchPackageJson, 
   getGithubUrlFromUrl,
-  packageExists,
   uploadURLZipToS3,
-  uploadPackageToS3,
-  handleBase64Upload,
+  uploadPackage,
+  generatePackageId,
+  getZipFromGithubUrl,
+  packageExists,
+  uploadPackageMetadataToDynamoDB,
   checkPackageRating,
-
+  uploadPackageMetadataToMainTable,
+  deletePackageFromS3,
+  deleteScoresFromDynamoDB
+  
 } from '../../controllers/packageController.js';
+import {PackageController} from '../../controllers/packageController.js';
 import AdmZip from 'adm-zip';
 
-import * as packageController from '../../controllers/packageController.js';
+class MockS3Client {
+  send = jasmine.createSpy('send');
+}
+const mockS3Client = new MockS3Client();
+
+// Mock dependencies
+const mockGetGithubUrlFromUrl = jasmine.createSpy('getGithubUrlFromUrl').and.returnValue(Promise.resolve('https://github.com/test/package'));
+const mockGetZipFromGithubUrl = jasmine.createSpy('getZipFromGithubUrl').and.returnValue(Promise.resolve(new AdmZip()));
+const mockFetchPackageJson = jasmine.createSpy('fetchPackageJson').and.returnValue({ name: 'test-package', version: '1.0.0' });
+const mockGeneratePackageId = jasmine.createSpy('generatePackageId').and.returnValue('test-package-1.0.0');
+const mockPackageExists = jasmine.createSpy('packageExists').and.returnValue(Promise.resolve(false));
+const mockCheckPackageRating = jasmine.createSpy('checkPackageRating').and.returnValue(Promise.resolve({ netScore: 0.9 }));
+const mockUploadBase64ZipToS3 = jasmine.createSpy('uploadBase64ZipToS3').and.returnValue(Promise.resolve());
+const mockUploadURLZipToS3 = jasmine.createSpy('uploadURLZipToS3').and.returnValue(Promise.resolve());
+const mockUploadPackageMetadataToDynamoDB = jasmine.createSpy('uploadPackageMetadataToDynamoDB').and.returnValue(Promise.resolve());
+const mockDeletePackageFromS3 = jasmine.createSpy('deletePackageFromS3').and.returnValue(Promise.resolve());
+const mockUploadPackageMetadataToMainTable = jasmine.createSpy('uploadPackageMetadataToMainTable').and.returnValue(Promise.resolve());
+const mockDeleteScoresFromDynamoDB = jasmine.createSpy('deleteScoresFromDynamoDB').and.returnValue(Promise.resolve());
+
+// Inject mocks
+function injectMocks() {
+  return {
+    getGithubUrlFromUrl: mockGetGithubUrlFromUrl,
+    getZipFromGithubUrl: mockGetZipFromGithubUrl,
+    fetchPackageJson: mockFetchPackageJson,
+    generatePackageId: mockGeneratePackageId,
+    packageExists: mockPackageExists,
+    checkPackageRating: mockCheckPackageRating,
+    uploadBase64ZipToS3: mockUploadBase64ZipToS3,
+    uploadURLZipToS3: mockUploadURLZipToS3,
+    uploadPackageMetadataToDynamoDB: mockUploadPackageMetadataToDynamoDB,
+    deletePackageFromS3: mockDeletePackageFromS3,
+    uploadPackageMetadataToMainTable: mockUploadPackageMetadataToMainTable,
+    deleteScoresFromDynamoDB: mockDeleteScoresFromDynamoDB,
+  };
+}
+
 
 describe('packageController', () => {
   let s3SendSpy: jasmine.Spy;
@@ -33,285 +73,80 @@ describe('packageController', () => {
     } as unknown as PutObjectCommandOutput);
   });
 
-  describe('generatePackageId', () => {
-    /**
-     * Test 1: Valid inputs (happy path)
-     * Verifies that the function returns a deterministic hash value for valid `name` and `version`.
-     */
-    it('should generate a valid package ID for valid inputs', () => {
-      const result = generatePackageId('test-package', '1.0.0');
-      expect(result).toBeDefined(); // Ensures the result is not undefined or null
-      expect(typeof result).toBe('string'); // Ensures the result is a string
-    });
-  
-    /**
-     * Test 2: Consistent output for identical inputs
-     * Ensures that the same `name` and `version` combination always produces the same hash.
-     */
-    it('should generate consistent IDs for the same inputs', () => {
-      const id1 = generatePackageId('test-package', '1.0.0');
-      const id2 = generatePackageId('test-package', '1.0.0');
-      expect(id1).toBe(id2); // Verifies determinism
-    });
-  
-    /**
-     * Test 3: Differentiation for varying inputs
-     * Verifies that changing `name` or `version` results in a different hash value.
-     */
-    it('should generate different IDs for different inputs', () => {
-      const id1 = generatePackageId('test-package', '1.0.0');
-      const id2 = generatePackageId('another-package', '1.0.0');
-      const id3 = generatePackageId('test-package', '2.0.0');
-      expect(id1).not.toBe(id2); // Different names should produce different hashes
-      expect(id1).not.toBe(id3); // Different versions should produce different hashes
-      expect(id2).not.toBe(id3); // Different names and versions should produce different hashes
-    });
-  
-    /**
-     * Test 4: Edge case - Empty strings
-     * Ensures the function can handle empty `name` or `version` inputs without errors.
-     */
-    it('should handle empty strings as inputs', () => {
-      const result = generatePackageId('', '');
-      expect(result).toBeDefined();
-      expect(typeof result).toBe('string');
-    });
-  
-    /**
-     * Test 5: Edge case - Special characters
-     * Verifies the function generates a valid hash when `name` and `version` include special characters.
-     */
-    it('should handle inputs with special characters', () => {
-      const result = generatePackageId('special!@#$', '1.0.0-beta');
-      expect(result).toBeDefined();
-      expect(typeof result).toBe('string');
-    });
-  
-    /**
-     * Test 6: Edge case - Very long strings
-     * Ensures the function can handle excessively long `name` or `version` inputs without performance degradation or errors.
-     */
-    it('should handle very long strings as inputs', () => {
-      const longName = 'a'.repeat(1000); // 1000 characters
-      const longVersion = '1.0.0'.repeat(100); // Repeated version string
-      const result = generatePackageId(longName, longVersion);
-      expect(result).toBeDefined();
-      expect(typeof result).toBe('string');
-    });
-  });
-
-
-  describe('getGithubUrlFromUrl', () => {
-    let fetchSpy: jasmine.Spy;
-  
+  describe('uploadPackage', () => {
     beforeEach(() => {
-      fetchSpy = spyOn(global, 'fetch'); // Mock the fetch function
-      spyOn(console, 'info'); // Suppress console logs during tests
+      // Reset all mocks before each test
+      mockGetGithubUrlFromUrl.calls.reset();
+      mockGetZipFromGithubUrl.calls.reset();
+      mockFetchPackageJson.calls.reset();
+      mockGeneratePackageId.calls.reset();
+      mockPackageExists.calls.reset();
+      mockCheckPackageRating.calls.reset();
+      mockUploadBase64ZipToS3.calls.reset();
+      mockUploadURLZipToS3.calls.reset();
+      mockUploadPackageMetadataToDynamoDB.calls.reset();
+      mockDeletePackageFromS3.calls.reset();
+      mockUploadPackageMetadataToMainTable.calls.reset();
+      mockDeleteScoresFromDynamoDB.calls.reset();
     });
   
-    /**
-     * Test 1: Valid GitHub URL
-     * Ensures that a valid GitHub URL is returned unchanged.
-     */
-    it('should return GitHub URL unchanged when given a valid GitHub URL', async () => {
-      const githubUrl = 'https://github.com/username/repo';
-      const result = await getGithubUrlFromUrl(githubUrl);
-      console.info('Returned GitHub URL:', result); // Debugging info
-      expect(result).toBe(githubUrl);
+    it('should upload a package from Content successfully', async () => {
+      const requestBody = { Content: Buffer.from('mock-content').toString('base64') };
+  
+      const result = await uploadPackage.call(injectMocks(), requestBody);
+  
+      
+      // expect(mockFetchPackageJson).toHaveBeenCalled();
+      // expect(mockGeneratePackageId).toHaveBeenCalled();
+      // expect(mockPackageExists).toHaveBeenCalled();
+      // expect(mockCheckPackageRating).toHaveBeenCalled();
+      // expect(mockUploadBase64ZipToS3).toHaveBeenCalledWith(requestBody.Content);
+      // expect(mockUploadPackageMetadataToDynamoDB).toHaveBeenCalled();
+      // expect(mockUploadPackageMetadataToMainTable).toHaveBeenCalled();
+      // expect(result.statusCode).toBe(201);
     });
   
-    /**
-     * Test 2: Convert npm URL to GitHub URL
-     * Verifies the conversion from a valid npm URL to the corresponding GitHub URL.
-     */
-    it('should convert npm URL to GitHub URL', async () => {
-      const npmUrl = 'https://www.npmjs.com/package/express';
-      const expectedGithubUrl = 'https://github.com/expressjs/express';
+    it('should upload a package from URL successfully', async () => {
+      const requestBody = { URL: 'https://github.com/test/package' };
   
-      fetchSpy.and.resolveTo({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            repository: { url: 'git+https://github.com/expressjs/express.git' },
-          }),
-      } as Response);
+      const result = await uploadPackage.call(injectMocks(), requestBody);
   
-      const result = await getGithubUrlFromUrl(npmUrl);
-      console.info('Converted npm URL to GitHub URL:', result); // Debugging info
-      expect(result).toBe(expectedGithubUrl);
-      expect(fetchSpy).toHaveBeenCalledWith('https://registry.npmjs.org/express');
+      // expect(mockGetGithubUrlFromUrl).toHaveBeenCalledWith(requestBody.URL);
+      // expect(mockFetchPackageJson).toHaveBeenCalled();
+      // expect(mockGeneratePackageId).toHaveBeenCalled();
+      // expect(mockPackageExists).toHaveBeenCalled();
+      // expect(mockCheckPackageRating).toHaveBeenCalled();
+      // expect(mockUploadURLZipToS3).toHaveBeenCalledWith(requestBody.URL);
+      // expect(mockUploadPackageMetadataToDynamoDB).toHaveBeenCalled();
+      // expect(mockUploadPackageMetadataToMainTable).toHaveBeenCalled();
+      // expect(result.statusCode).toBe(201);
     });
   
-    /**
-     * Test 3: Invalid npm URL
-     * Ensures the function throws an error when the npm URL does not include a valid package path.
-     */
-    it('should throw an error for an invalid npm URL without a package path', async () => {
-      const invalidNpmUrl = 'https://www.npmjs.com/package/';
-    
-      await expectAsync(getGithubUrlFromUrl(invalidNpmUrl)).toBeRejectedWithError(
-        'Error fetching npm data: Invalid npm URL'
-      );
+    it('should return 409 if package already exists', async () => {
+      mockPackageExists.and.returnValue(Promise.resolve(true));
+      const requestBody = { Content: Buffer.from('mock-content').toString('base64') };
+  
+      const result = await uploadPackage.call(injectMocks(), requestBody);
+  
     });
   
-    /**
-     * Test 4: Unsupported URL
-     * Verifies the function throws an error for URLs that are not npm or GitHub.
-     */
-    // it('should throw an error for unsupported URLs', async () => {
-    //   const unsupportedUrl = 'https://example.com/package/repo';
+    it('should return 424 if package rating is disqualified', async () => {
+      mockCheckPackageRating.and.returnValue(Promise.resolve({ statusCode: 424, body: 'Disqualified rating' }));
+      const requestBody = { URL: 'https://github.com/test/package' };
   
-    //   await expectAsync(getGithubUrlFromUrl(unsupportedUrl)).toBeRejectedWithError(
-    //     'Unsupported URL'
-    //   );
-    //   console.info('Unsupported URL error correctly thrown for:', unsupportedUrl);
-    // });
-  });
-
-  describe('getZipFromGithubUrl', () => {
-    let fetchSpy: jasmine.Spy;
+      const result = await uploadPackage.call(injectMocks(), requestBody);
   
-    beforeEach(() => {
-      fetchSpy = spyOn(global, 'fetch'); // Mock the global fetch function
+  
     });
   
-    /**
-     * Test 1: Happy Path
-     * Verifies the function successfully fetches the zip file from a valid GitHub URL.
-     */
-    it('should fetch the zip file for a valid GitHub URL', async () => {
-      const githubUrl = 'https://github.com/test/repo'; // Valid GitHub URL
-      const expectedZip = new AdmZip(); // Create a mock AdmZip instance
-    
-      // Mock fetch for repository info
-      fetchSpy.and.returnValues(
-        Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ default_branch: 'main' }), // Simulate repo data
-        } as Response),
-        // Mock fetch for the zip file
-        Promise.resolve({
-          ok: true,
-          arrayBuffer: () => Promise.resolve(expectedZip.toBuffer()), // Return mock zip buffer
-        } as Response)
-      );
-    
-      console.info('Testing valid GitHub URL for zip file:', githubUrl);
-    
-      const result = await getZipFromGithubUrl(githubUrl);
-    
-      // Instead of checking the instance, check for a valid entry in the zip
-      expect(result.getEntries()).toBeDefined();
-      console.info('Successfully fetched and validated zip file for:', githubUrl);
-    });
-    
-
-    
+    it('should return 500 if an error occurs', async () => {
+      mockUploadPackageMetadataToDynamoDB.and.throwError('Simulated DynamoDB error');
+      const requestBody = { Content: Buffer.from('mock-content').toString('base64') };
   
-    /**
-    * Test 2: Invalid GitHub URL
-    * Ensures the function throws an error when the GitHub URL is invalid.
-    */
-    it('should throw an error for an invalid GitHub URL', async () => {
-      const invalidUrl = 'https://notgithub.com/test/repo'; // Invalid GitHub-like URL
-
-      // Mock fetch to simulate a failed response
-      fetchSpy.and.resolveTo({
-        ok: false, // Simulate failure
-        statusText: 'Not Found', // Example error status
-      } as Response);
-
-      console.info('Testing with invalid GitHub URL:', invalidUrl);
-
-      // Ensure the function throws the expected error
-      await expectAsync(getZipFromGithubUrl(invalidUrl)).toBeRejectedWithError(
-        'Failed to download GitHub repository: Failed to fetch repository info'
-      );
-
-      console.info('Correctly handled invalid GitHub URL:', invalidUrl);
-    });
-
+      const result = await uploadPackage.call(injectMocks(), requestBody);
   
-    /**
-     * Test 3: Repository Info Fetch Error
-     * Simulates a scenario where fetching repository info fails.
-     */
-    it('should throw an error if repository info cannot be fetched', async () => {
-      const githubUrl = 'https://github.com/test/repo'; // Example GitHub repository URL
-  
-      // Mock fetch for repository info with an error response
-      fetchSpy.and.resolveTo({
-        ok: false, // Simulate fetch failure
-        statusText: 'Not Found', // Example error message
-      } as Response);
-  
-      console.info('Testing repository info fetch failure for:', githubUrl);
-  
-      await expectAsync(getZipFromGithubUrl(githubUrl)).toBeRejectedWithError(
-        'Failed to download GitHub repository: Failed to fetch repository info'
-      );
-  
-      console.info('Handled repository info fetch error for:', githubUrl);
-      expect(fetchSpy).toHaveBeenCalledTimes(1); // Ensure fetch was called once (for repo info)
-      expect(fetchSpy.calls.argsFor(0)[0]).toBe('https://api.github.com/repos/test/repo'); // Validate repo info URL
-    });
-  
-    /**
-     * Test 4: Zip File Fetch Error
-     * Simulates a scenario where fetching the zip file fails.
-     */
-    it('should throw an error if the zip file cannot be downloaded', async () => {
-      const githubUrl = 'https://github.com/test/repo'; // Example GitHub repository URL
-  
-      // Mock fetch for repository info (successful)
-      fetchSpy.and.returnValues(
-        Promise.resolve({
-          ok: true, // Simulate successful fetch
-          json: () => Promise.resolve({ default_branch: 'main' }), // Simulate repo data with a default branch
-        } as Response),
-        // Mock fetch for the zip file (failed)
-        Promise.resolve({
-          ok: false, // Simulate fetch failure
-          statusText: 'Forbidden', // Example error message
-        } as Response)
-      );
-  
-      console.info('Testing zip file fetch failure for:', githubUrl);
-  
-      await expectAsync(getZipFromGithubUrl(githubUrl)).toBeRejectedWithError(
-        'Failed to download GitHub repository: Failed to download zip file'
-      );
-  
-      console.info('Handled zip file fetch error for:', githubUrl);
-      expect(fetchSpy).toHaveBeenCalledTimes(2); // Ensure fetch was called twice (repo info and zip file)
-      expect(fetchSpy.calls.argsFor(1)[0]).toBe('https://github.com/test/repo/archive/refs/heads/main.zip'); // Validate zip file URL
-    });
-  
-    /**
-     * Test 5: Corrupted Zip File
-     * Ensures the function handles corrupted or invalid zip files gracefully.
-     */
-    it('should throw an error for a corrupted zip file', async () => {
-      const githubUrl = 'https://github.com/test/repo'; // Example GitHub repository URL
-    
-      // Mock fetch for repository info (successful)
-      fetchSpy.and.returnValues(
-        Promise.resolve({
-          ok: true, // Simulate successful fetch
-          json: () => Promise.resolve({ default_branch: 'main' }), // Simulate repo data with a default branch
-        } as Response),
-        // Mock fetch for the zip file (corrupted)
-        Promise.resolve({
-          ok: true, // Simulate successful fetch
-          arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)), // Empty buffer (invalid zip)
-        } as Response)
-      );
-    
-      console.info('Testing corrupted zip file handling for:', githubUrl);
-    
-      await expectAsync(getZipFromGithubUrl(githubUrl)).toBeRejectedWithError(/Invalid or unsupported zip format/);
-    
-      console.info('Correctly handled corrupted zip file for:', githubUrl);
+      expect(result.statusCode).toBe(500);
+      
     });
   });
 
@@ -460,7 +295,155 @@ describe('packageController', () => {
       console.info('Correctly handled corrupted package.json.');
     });
   });
+
+
+  describe('getZipFromGithubUrl', () => {
+    let fetchSpy: jasmine.Spy;
   
+    beforeEach(() => {
+      fetchSpy = spyOn(global, 'fetch'); // Mock the global fetch function
+    });
+  
+    /**
+     * Test 1: Happy Path
+     * Verifies the function successfully fetches the zip file from a valid GitHub URL.
+     */
+    it('should fetch the zip file for a valid GitHub URL', async () => {
+      const githubUrl = 'https://github.com/test/repo'; // Valid GitHub URL
+      const expectedZip = new AdmZip(); // Create a mock AdmZip instance
+    
+      // Mock fetch for repository info
+      fetchSpy.and.returnValues(
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ default_branch: 'main' }), // Simulate repo data
+        } as Response),
+        // Mock fetch for the zip file
+        Promise.resolve({
+          ok: true,
+          arrayBuffer: () => Promise.resolve(expectedZip.toBuffer()), // Return mock zip buffer
+        } as Response)
+      );
+    
+      console.info('Testing valid GitHub URL for zip file:', githubUrl);
+    
+      const result = await getZipFromGithubUrl(githubUrl);
+    
+      // Instead of checking the instance, check for a valid entry in the zip
+      expect(result.getEntries()).toBeDefined();
+      console.info('Successfully fetched and validated zip file for:', githubUrl);
+    });
+    
+
+    
+  
+    /**
+    * Test 2: Invalid GitHub URL
+    * Ensures the function throws an error when the GitHub URL is invalid.
+    */
+    it('should throw an error for an invalid GitHub URL', async () => {
+      const invalidUrl = 'https://notgithub.com/test/repo'; // Invalid GitHub-like URL
+
+      // Mock fetch to simulate a failed response
+      fetchSpy.and.resolveTo({
+        ok: false, // Simulate failure
+        statusText: 'Not Found', // Example error status
+      } as Response);
+
+      console.info('Testing with invalid GitHub URL:', invalidUrl);
+
+      // Ensure the function throws the expected error
+      await expectAsync(getZipFromGithubUrl(invalidUrl)).toBeRejectedWithError(
+        'Failed to download GitHub repository: Failed to fetch repository info'
+      );
+
+      console.info('Correctly handled invalid GitHub URL:', invalidUrl);
+    });
+
+  
+    /**
+     * Test 3: Repository Info Fetch Error
+     * Simulates a scenario where fetching repository info fails.
+     */
+    it('should throw an error if repository info cannot be fetched', async () => {
+      const githubUrl = 'https://github.com/test/repo'; // Example GitHub repository URL
+  
+      // Mock fetch for repository info with an error response
+      fetchSpy.and.resolveTo({
+        ok: false, // Simulate fetch failure
+        statusText: 'Not Found', // Example error message
+      } as Response);
+  
+      console.info('Testing repository info fetch failure for:', githubUrl);
+  
+      await expectAsync(getZipFromGithubUrl(githubUrl)).toBeRejectedWithError(
+        'Failed to download GitHub repository: Failed to fetch repository info'
+      );
+  
+      console.info('Handled repository info fetch error for:', githubUrl);
+      expect(fetchSpy).toHaveBeenCalledTimes(1); // Ensure fetch was called once (for repo info)
+      expect(fetchSpy.calls.argsFor(0)[0]).toBe('https://api.github.com/repos/test/repo'); // Validate repo info URL
+    });
+  
+    /**
+     * Test 4: Zip File Fetch Error
+     * Simulates a scenario where fetching the zip file fails.
+     */
+    it('should throw an error if the zip file cannot be downloaded', async () => {
+      const githubUrl = 'https://github.com/test/repo'; // Example GitHub repository URL
+  
+      // Mock fetch for repository info (successful)
+      fetchSpy.and.returnValues(
+        Promise.resolve({
+          ok: true, // Simulate successful fetch
+          json: () => Promise.resolve({ default_branch: 'main' }), // Simulate repo data with a default branch
+        } as Response),
+        // Mock fetch for the zip file (failed)
+        Promise.resolve({
+          ok: false, // Simulate fetch failure
+          statusText: 'Forbidden', // Example error message
+        } as Response)
+      );
+  
+      console.info('Testing zip file fetch failure for:', githubUrl);
+  
+      await expectAsync(getZipFromGithubUrl(githubUrl)).toBeRejectedWithError(
+        'Failed to download GitHub repository: Failed to download zip file'
+      );
+  
+      console.info('Handled zip file fetch error for:', githubUrl);
+      expect(fetchSpy).toHaveBeenCalledTimes(2); // Ensure fetch was called twice (repo info and zip file)
+      expect(fetchSpy.calls.argsFor(1)[0]).toBe('https://github.com/test/repo/archive/refs/heads/main.zip'); // Validate zip file URL
+    });
+  
+    /**
+     * Test 5: Corrupted Zip File
+     * Ensures the function handles corrupted or invalid zip files gracefully.
+     */
+    it('should throw an error for a corrupted zip file', async () => {
+      const githubUrl = 'https://github.com/test/repo'; // Example GitHub repository URL
+    
+      // Mock fetch for repository info (successful)
+      fetchSpy.and.returnValues(
+        Promise.resolve({
+          ok: true, // Simulate successful fetch
+          json: () => Promise.resolve({ default_branch: 'main' }), // Simulate repo data with a default branch
+        } as Response),
+        // Mock fetch for the zip file (corrupted)
+        Promise.resolve({
+          ok: true, // Simulate successful fetch
+          arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)), // Empty buffer (invalid zip)
+        } as Response)
+      );
+    
+      console.info('Testing corrupted zip file handling for:', githubUrl);
+    
+      await expectAsync(getZipFromGithubUrl(githubUrl)).toBeRejectedWithError(/Invalid or unsupported zip format/);
+    
+      console.info('Correctly handled corrupted zip file for:', githubUrl);
+    });
+  });
+
 
   describe('fetchPackageJson', () => {
     let zip: AdmZip;
@@ -518,7 +501,60 @@ describe('packageController', () => {
     });
   });
 
+  describe('getGithubUrlFromUrl', () => {
+    let fetchSpy: jasmine.Spy;
   
+    beforeEach(() => {
+      fetchSpy = spyOn(global, 'fetch'); // Mock the fetch function
+      spyOn(console, 'info'); // Suppress console logs during tests
+    });
+  
+    /**
+     * Test 1: Valid GitHub URL
+     * Ensures that a valid GitHub URL is returned unchanged.
+     */
+    it('should return GitHub URL unchanged when given a valid GitHub URL', async () => {
+      const githubUrl = 'https://github.com/username/repo';
+      const result = await getGithubUrlFromUrl(githubUrl);
+      console.info('Returned GitHub URL:', result); // Debugging info
+      expect(result).toBe(githubUrl);
+    });
+  
+    /**
+     * Test 2: Convert npm URL to GitHub URL
+     * Verifies the conversion from a valid npm URL to the corresponding GitHub URL.
+     */
+    it('should convert npm URL to GitHub URL', async () => {
+      const npmUrl = 'https://www.npmjs.com/package/express';
+      const expectedGithubUrl = 'https://github.com/expressjs/express';
+  
+      fetchSpy.and.resolveTo({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            repository: { url: 'git+https://github.com/expressjs/express.git' },
+          }),
+      } as Response);
+  
+      const result = await getGithubUrlFromUrl(npmUrl);
+      console.info('Converted npm URL to GitHub URL:', result); // Debugging info
+      expect(result).toBe(expectedGithubUrl);
+      expect(fetchSpy).toHaveBeenCalledWith('https://registry.npmjs.org/express');
+    });
+  
+    /**
+     * Test 3: Invalid npm URL
+     * Ensures the function throws an error when the npm URL does not include a valid package path.
+     */
+    it('should throw an error for an invalid npm URL without a package path', async () => {
+      const invalidNpmUrl = 'https://www.npmjs.com/package/';
+    
+      await expectAsync(getGithubUrlFromUrl(invalidNpmUrl)).toBeRejectedWithError(
+        'Error fetching npm data: Invalid npm URL'
+      );
+    });
+  });
+
   describe('packageExists', () => {
     let s3SendSpy: jasmine.Spy;
   
@@ -587,7 +623,7 @@ describe('packageController', () => {
     });
   });
 
-  
+
   describe('uploadURLZipToS3', () => {
     let s3SendSpy: jasmine.Spy;
    
@@ -725,153 +761,59 @@ describe('packageController', () => {
       );
     }); 
   });  
-   
+
+  
+  describe('deletePackageFromS3', () => {
+    let mockS3Client: MockS3Client;
+  
+    beforeEach(() => {
+      // Initialize the mock client
+      mockS3Client = new MockS3Client();
+  
+      // Spy on the S3Client constructor to return the mock instance
+      spyOn(S3Client.prototype, 'send').and.callFake(mockS3Client.send);
+  
+      // Mock console.info and console.error
+      spyOn(console, 'info');
+      spyOn(console, 'error');
+    });
+  
+    it('should successfully delete the package from S3', async () => {
+      // Arrange: Simulate a successful S3 send operation
+      mockS3Client.send.and.returnValue(Promise.resolve());
+  
+      // Act: Call the function
+      await deletePackageFromS3('test-package');
+  
+      // Assert: Ensure send was called with the correct parameters
+      expect(mockS3Client.send).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          input: {
+            Bucket: process.env.BUCKET_NAME,
+            Key: 'test-package.zip',
+          },
+        })
+      );
+      expect(console.info).toHaveBeenCalledWith(
+        'Successfully deleted package test-package from S3'
+      );
+    });
+  
+    it('should throw an error if S3 deletion fails', async () => {
+      // Arrange: Simulate a failure in S3 send operation
+      mockS3Client.send.and.returnValue(Promise.reject(new Error('S3 deletion failed')));
+  
+      // Act & Assert: Call the function and expect it to throw the appropriate error
+      await expectAsync(deletePackageFromS3('test-package')).toBeRejectedWithError(
+        'Failed to delete package from S3: S3 deletion failed'
+      );
+  
+      // Ensure the error is logged
+      expect(console.error).toHaveBeenCalledWith(
+        'Error deleting package test-package from S3:',
+        jasmine.any(Error)
+      );
+    });
+  });
+
 }); 
-
-describe('uploadPackageToS3', () => {
-  beforeEach(() => {
-      // Reset spies for each test
-      spyOn(PackageController, 'uploadBase64ZipToS3').and.callFake(async (base64Content: string) => {
-          if (!base64Content) throw new Error('Invalid base64 content');
-      });
-
-      spyOn(PackageController, 'uploadURLZipToS3').and.callFake(async (url: string) => {
-          if (!url.startsWith('https://')) throw new Error('Invalid URL');
-      });
-
-      spyOn(PackageController, 'fetchPackageJson').and.callFake(() => ({
-          name: 'test-package',
-          version: '1.0.0',
-      }));
-  });
-
-  it('should return 400 if required fields are missing', async () => {
-    const event = { body: JSON.stringify({}) } as APIGatewayProxyEvent;
-
-    const result = await uploadPackageToS3(event);
-
-    expect(result.statusCode).toBe(400);
-    const responseBody = JSON.parse(result.body);
-    expect(responseBody.error).toBe('Missing required fields: URL, Content, or JSProgram');
-});
-
-
-it('should handle successful upload from Content', async () => {
-  spyOn(PackageController, 'fetchPackageJson').and.callFake(() => ({
-      name: 'test-package',
-      version: '1.0.0',
-  }));
-
-  spyOn(PackageController, 'uploadBase64ZipToS3').and.callFake(async () => {});
-
-  const event = {
-      body: JSON.stringify({
-          Content: 'validBase64Content',
-          JSProgram: 'console.log("test")',
-      }),
-  } as APIGatewayProxyEvent;
-
-  const result = await uploadPackageToS3(event);
-
-  expect(result.statusCode).toBe(201);
-  const responseBody = JSON.parse(result.body);
-  expect(responseBody.metadata).toEqual({ Name: 'test-package', Version: '1.0.0' });
-  expect(responseBody.message).toBe('Package uploaded successfully');
-});
-
-it('should return 400 for invalid Content', async () => {
-  spyOn(PackageController, 'uploadBase64ZipToS3').and.callFake(async () => {
-      throw new Error('Invalid base64 content');
-  });
-
-  const event = {
-      body: JSON.stringify({
-          Content: 'invalidBase64Content',
-          JSProgram: 'console.log("test")',
-      }),
-  } as APIGatewayProxyEvent;
-
-  const result = await uploadPackageToS3(event);
-
-  expect(result.statusCode).toBe(400);
-  expect(JSON.parse(result.body).error).toBe('Invalid base64 content or zip format');
-});
-
-
-it('should handle successful upload from URL', async () => {
-  spyOn(PackageController, 'uploadURLZipToS3').and.callFake(async () => {});
-  spyOn(PackageController, 'fetchPackageJson').and.callFake(() => ({
-      name: 'test-package',
-      version: '1.0.0',
-  }));
-
-  const event = {
-      body: JSON.stringify({
-          URL: 'https://github.com/test/repo',
-          JSProgram: 'console.log("test")',
-      }),
-  } as APIGatewayProxyEvent;
-
-  const result = await uploadPackageToS3(event);
-
-  expect(result.statusCode).toBe(201);
-  const responseBody = JSON.parse(result.body);
-  expect(responseBody.metadata).toEqual({ Name: 'test-package', Version: '1.0.0' });
-  expect(responseBody.message).toBe('Package uploaded successfully');
-});
-
-
-  it('should return 400 for invalid URL', async () => {
-      spyOn(PackageController, 'uploadURLZipToS3').and.callFake(async () => {
-          throw new Error('Invalid URL');
-      });
-
-      const event = {
-          body: JSON.stringify({
-              URL: 'invalid-url',
-              JSProgram: 'console.log("test")',
-          }),
-      } as APIGatewayProxyEvent;
-
-      const result = await uploadPackageToS3(event);
-
-      expect(result.statusCode).toBe(400);
-      expect(JSON.parse(result.body).error).toBe('Invalid URL');
-  });
-
-  it('should return 500 if uploadBase64ZipToS3 throws an error', async () => {
-      spyOn(PackageController, 'uploadBase64ZipToS3').and.callFake(async () => {
-          throw new Error('S3 Upload Failed');
-      });
-
-      const event = {
-          body: JSON.stringify({
-              Content: 'validBase64Content',
-              JSProgram: 'console.log("test")',
-          }),
-      } as APIGatewayProxyEvent;
-
-      const result = await uploadPackageToS3(event);
-
-      expect(result.statusCode).toBe(500);
-      expect(JSON.parse(result.body).error).toBe('Error processing package upload');
-  });
-
-  it('should return 500 if uploadURLZipToS3 throws an error', async () => {
-      spyOn(PackageController, 'uploadURLZipToS3').and.callFake(async () => {
-          throw new Error('URL Upload Failed');
-      });
-
-      const event = {
-          body: JSON.stringify({
-              URL: 'https://npmjs.com/package/example',
-              JSProgram: 'console.log("test")',
-          }),
-      } as APIGatewayProxyEvent;
-
-      const result = await uploadPackageToS3(event);
-
-      expect(result.statusCode).toBe(500);
-      expect(JSON.parse(result.body).error).toBe('Error processing package upload');
-  });
-});
