@@ -404,7 +404,7 @@ const deleteScoresFromDynamoDB = async (packageId: string): Promise<void> => {
 
 //Function to validate the score and ensure all scores are above 0.5
 const validateScore = (score: any): boolean => {
-  const lim = 0;
+  const lim = 0.5;
   return score.BusFactor >= lim && score.Correctness >= lim && score.RampUp >= lim && score.ResponsiveMaintainer >= lim && score.LicenseScore >= lim && score.GoodPinningPractice >= lim && score.PullRequest >= lim;
 };
 
@@ -466,13 +466,6 @@ const checkPackageRating = async (requestBody: PackageData): Promise<any> => {
       const zip = new AdmZip(tempBuffer);
       const url = await getGithubUrlFromZip(zip);
       const score = await netScore(url);
-      const validScore = validateScore(score);
-      if (!validScore) {
-        return {
-          statusCode: 424,
-          body: JSON.stringify({ error: 'Package is not uploaded due to the disqualified rating' })
-        };
-      }
       return score;
     }
   } catch (error) {
