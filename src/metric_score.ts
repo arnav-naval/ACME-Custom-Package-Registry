@@ -210,136 +210,173 @@ function isPinned(version: string): boolean {
 }
 
 //calculated pinned dependencies score, using pinned dependencies from package.json
-export async function pinnedDependenciesScore(repoUrl: string): Promise<number> {
+export async function pinnedDependenciesScore(
+  repoUrl: string,
+  fetchRepoContentsFn = fetchRepoContents // Default to actual implementation
+): Promise<number> {
   try {
-    //Get repo contents and package.json
-    const files: File[] = await fetchRepoContents(repoUrl);
-    const packageJson = files.find(file => file.name.toLowerCase() === 'package.json');
+    const files: File[] = await fetchRepoContentsFn(repoUrl);
+    const packageJsonFiles = files.filter(file => file.name.toLowerCase() === 'package.json');
 
-    //If no package.json, return 1
-    if (!packageJson) {
-      return parseFloat((1.00).toFixed(2));
+    if (packageJsonFiles.length === 0) {
+      return 1.0; // No `package.json` files
     }
 
-    //Fetch package.json
-    const response = await fetch(packageJson.download_url, {
-      headers: {
-        Authorization: `token ${process.env.GITHUB_TOKEN}`,
-      },
-    });
+    let totalScore = 0.0;
+    let totalDependencies = 0;
 
-    //If failed to fetch package.json, throw error
-    if (!response.ok) {
-      throw new Error(`Failed to fetch package.json: ${response.statusText}`);
-    }
+    for (const packageJson of packageJsonFiles) {
+      // Handle missing download URL
+      if (!packageJson.download_url) {
+        totalScore += 0.0; // Penalize missing download URL
+        totalDependencies += 1;
+        continue;
+      }
 
-    //Parse package.json
-    const content = await response.json();
+      try {
+        const response = await fetch(packageJson.download_url, {
+          headers: { Authorization: `token ${process.env.GITHUB_TOKEN}` },
+        });
 
-    //Get dependencies and devDependencies
-    const dependencies = content.dependencies || {};
-    const devDependencies = content.devDependencies || {};
-    const allDependencies = new Set([
-      ...Object.keys(dependencies),
-      ...Object.keys(devDependencies)
-    ]);
-
-    let totalDependencies = allDependencies.size;
-
-    if (totalDependencies === 0) {
-      return parseFloat((1.00).toFixed(2));
-    }
-
-    let pinnedDependencies = 0;
-
-    //Check if dependencies are pinned
-    for (const dependency of allDependencies) {
-      const prodVersion = dependencies[dependency];
-      const devVersion = devDependencies[dependency];
-      
-      if (prodVersion && devVersion) {
-        // If dependency exists in both, check both versions
-        if (isPinned(prodVersion) && isPinned(devVersion)) {
-          pinnedDependencies++;
+        if (!response.ok) {
+          totalScore += 0.0; // Penalize failed fetch
+          totalDependencies += 1;
+          continue;
         }
-      } else {
-        // Check whichever version exists
-        const version = prodVersion || devVersion;
-        if (isPinned(version)) {
-          pinnedDependencies++;
+
+        const content = await response.json();
+        const dependencies = content.dependencies || {};
+        const devDependencies = content.devDependencies || {};
+
+        // Handle duplicate dependencies, use a map to ensure unique dependencies
+        const uniqueDependencies = new Map<string, string>();
+        Object.entries(dependencies).forEach(([key, value]) => uniqueDependencies.set(key, value as string));
+        Object.entries(devDependencies).forEach(([key, value]) => {
+          if (!uniqueDependencies.has(key)) {
+            uniqueDependencies.set(key, value as string);
+          }
+        });
+
+        const allDependencies = Array.from(uniqueDependencies.entries())
+          .filter(([, value]) => typeof value === 'string');
+
+        if (allDependencies.length === 0) {
+          totalScore += 1.0; // No dependencies
+          totalDependencies += 1;
+          continue;
         }
+
+        const pinnedDependencies = allDependencies.filter(([, version]) => 
+          version && /^\d+\.\d+\.\d+$/.test(version)
+        ).length;
+
+        // Adjust score calculation to match the expected precision
+        const dependencyScore = parseFloat((pinnedDependencies / allDependencies.length).toFixed(2));
+        totalScore += dependencyScore;
+        totalDependencies += 1;
+
+      } catch (error) {
+        // Handle JSON parsing errors or other fetch-related issues
+        totalScore += 0.0;
+        totalDependencies += 1;
       }
     }
 
-    //Calculate score which is pinned dependencies / total dependencies and limited between 0 and 1
-    const score = pinnedDependencies / totalDependencies;
-
-    //Return score rounded to 2 decimal places
-    return parseFloat(score.toFixed(2));
+    return totalDependencies > 0 ? parseFloat((totalScore / totalDependencies).toFixed(2)) : 1.0;
+  } catch (error) {
+    console.error(`Error in pinnedDependenciesScore: ${error.message}`);
+    return 0.0;
   }
-  catch (error) {
-    console.info(`Error calculating pinned dependencies score: ${error.message}`);
-    return 0; //Return 0 if there's an error
-  }
-};
+}
 
-//Calculates PR review score
+
+
+
 export async function pullRequestReviewScore(repoUrl: string): Promise<number> {
   try {
-    // Extract owner and repo from repoUrl
-    const [owner, repo] = repoUrl.split("github.com/")[1].split("/").map(part => part.trim());
-    if (!owner || !repo) throw new Error("Invalid GitHub repository path");
+    // Parse and validate the GitHub repository URL
+    const parseRepoUrl = (url: string): { owner: string; repo: string } => {
+      url = url.replace(/\/+$/, ''); // Remove trailing slashes
+      const match = url.match(/github\.com\/([^/]+)\/([^/]+)$/i);
+      if (!match) throw new Error('Invalid GitHub repository path');
+      return { owner: match[1], repo: match[2] };
+    };
 
-    // Initialize mergedPRs array and set maxPRs to 100
-    const mergedPRs: any[] = [];
-    const maxPRs = 100; // Reduced limit to 100 PRs
+    const { owner, repo } = parseRepoUrl(repoUrl);
 
-    // Fetch merged PRs up to maxPRs
-    const response = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/pulls?state=closed&per_page=${maxPRs}`,
-      {
-        headers: {
-          Authorization: `token ${process.env.GITHUB_TOKEN}`,
-          'Content-Type': 'application/json',
-        },
+    // Fetch all merged PRs
+    const fetchMergedPRs = async (): Promise<any[]> => {
+      const mergedPRs = [];
+      let page = 1;
+      const maxPRs = 100;
+
+      while (true) {
+        const response = await fetch(
+          `https://api.github.com/repos/${owner}/${repo}/pulls?state=closed&per_page=${maxPRs}&page=${page}`,
+          {
+            headers: {
+              Authorization: `token ${process.env.GITHUB_TOKEN}`,
+              'Accept': 'application/vnd.github.v3+json',
+            },
+          }
+        );
+
+        if (!response.ok) {
+          if (response.status === 404) return []; // Repo not found
+          throw new Error(`GitHub API error: ${response.status}`);
+        }
+
+        const prs = await response.json();
+        mergedPRs.push(...prs.filter((pr: any) => pr.merged_at)); // Include only merged PRs
+
+        if (prs.length < maxPRs) break; // Stop if less than max PRs fetched
+        page++;
       }
-    );
 
-    //Throw error if failed to fetch PRs
-    if (!response.ok) throw new Error(`Failed to fetch PRs: ${response.statusText}`);
+      return mergedPRs;
+    };
 
-    //Fetch PRs and add merged PRs to mergedPRs array
-    const prs = await response.json();
-    mergedPRs.push(...prs.filter(pr => pr.merged_at !== null).slice(0, maxPRs));
-
-    let prsWithReviews = 0;
-    const batchSize = 10; // Process in smaller batches
-
-    //Process PRs in batches
-    for (let i = 0; i < mergedPRs.length; i += batchSize) {
-      const batch = mergedPRs.slice(i, i + batchSize);
-      const reviewPromises = batch.map(pr =>
-        fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${pr.number}/reviews`, {
+    // Fetch reviews for a PR
+    const fetchPRReviews = async (prNumber: number): Promise<any[]> => {
+      const response = await fetch(
+        `https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}/reviews`,
+        {
           headers: {
             Authorization: `token ${process.env.GITHUB_TOKEN}`,
-            'Content-Type': 'application/json',
+            'Accept': 'application/vnd.github.v3+json',
           },
-        }).then(res => res.json())
+        }
       );
 
-      //Fetch reviews and add to prsWithReviews if reviews are present
-      const batchReviews = await Promise.all(reviewPromises);
-      prsWithReviews += batchReviews.filter(reviews => reviews.length > 0).length;
-    }
+      if (!response.ok) return []; // Return empty if reviews are inaccessible
+      return await response.json();
+    };
 
-    //Calculate score which is number of PRs with reviews / total number of PRs
-    const score = mergedPRs.length > 0 ? prsWithReviews / mergedPRs.length : 0;
-    return parseFloat(score.toFixed(2));
+    const mergedPRs = await fetchMergedPRs();
+
+    // If no merged PRs, score is 0
+    if (mergedPRs.length === 0) return 0;
+
+    // Fetch reviews for each PR
+    const reviewResults = await Promise.all(
+      mergedPRs.map(async (pr) => {
+        const reviews = await fetchPRReviews(pr.number);
+        return reviews.some((review: any) => review.state === 'APPROVED'); // Count PRs with approved reviews
+      })
+    );
+
+    // Calculate review score
+    const reviewedPRs = reviewResults.filter(Boolean).length;
+    const score = reviewedPRs / mergedPRs.length;
+
+    return Number(score.toFixed(2));
   } catch (error) {
-    console.info(`Error in pullRequestReviewScore: ${error.message}`);
+    console.error('Error in pullRequestReviewScore:', error);
     return 0;
   }
 }
+
+
 
 // analyzes presence and completness of relevant documentation
 // for new developers and return M_r(r) as specified in project plan
