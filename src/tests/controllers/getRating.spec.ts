@@ -1,6 +1,7 @@
 import { DynamoDBClient, GetItemCommand } from '@aws-sdk/client-dynamodb';
 import { getPackageRating } from '../../controllers/getRatingController.js'; // Adjust the path to your function
 
+
 // Mock DynamoDBClient
 class MockDynamoDBClient {
     send: jasmine.Spy;
