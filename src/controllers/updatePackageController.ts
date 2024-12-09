@@ -13,7 +13,6 @@ export interface PackageResponse {
     metadata: {
       Name: string;
       Version: string;
-      ID: string;
     }
     data: {
       Content?: string;
