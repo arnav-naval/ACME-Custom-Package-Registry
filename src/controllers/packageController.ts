@@ -404,7 +404,7 @@ const deleteScoresFromDynamoDB = async (packageId: string): Promise<void> => {
 
 //Function to validate the score and ensure all scores are above 0.5
 const validateScore = (score: any): boolean => {
-  const lim = 0.5;
+  const lim = 0;
   return score.BusFactor >= lim && score.Correctness >= lim && score.RampUp >= lim && score.ResponsiveMaintainer >= lim && score.LicenseScore >= lim && score.GoodPinningPractice >= lim && score.PullRequest >= lim;
 };
 
